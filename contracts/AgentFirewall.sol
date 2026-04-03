@@ -52,10 +52,14 @@ contract AgentFirewall is Ownable {
     uint256 public nextQueueId;
 
     IENSResolver public ensResolver;
+    address public creOracle;
 
     uint256 public blockThreshold = 70_000;
     uint256 public escalateThreshold = 40_000;
     uint256 public maxStrikes = 5;
+
+    uint256 public constant EMA_ALPHA = 300;
+    uint256 public constant EMA_SCALE = 1000;
 
     // ---------------------------------------------------------------
     //  Events
@@ -99,9 +103,22 @@ contract AgentFirewall is Ownable {
         uint256 threatScore
     );
 
+    event ThreatScoreUpdated(
+        string  indexed agentId,
+        uint256 previousScore,
+        uint256 newScore,
+        uint256 rawDetectionScore,
+        uint256 strikes
+    );
+
     // ---------------------------------------------------------------
     //  Modifiers
     // ---------------------------------------------------------------
+
+    modifier onlyOracle() {
+        require(msg.sender == creOracle, "Only CRE oracle");
+        _;
+    }
 
     modifier agentExists(string calldata agentId) {
         require(agents[agentId].registeredAt != 0, "Agent not found");
@@ -112,8 +129,9 @@ contract AgentFirewall is Ownable {
     //  Constructor
     // ---------------------------------------------------------------
 
-    constructor(address _ensResolver) Ownable(msg.sender) {
+    constructor(address _ensResolver, address _creOracle) Ownable(msg.sender) {
         ensResolver = IENSResolver(_ensResolver);
+        creOracle = _creOracle;
     }
 
     // ---------------------------------------------------------------
@@ -266,6 +284,34 @@ contract AgentFirewall is Ownable {
         require(!action.resolved, "Already resolved");
         action.resolved = true;
         emit ActionBlocked(actionId, action.agentId, "Rejected by owner via Ledger");
+    }
+
+    // ---------------------------------------------------------------
+    //  Threat Score Updates (CRE oracle)
+    // ---------------------------------------------------------------
+
+    function updateThreatScore(
+        string calldata agentId,
+        uint256 rawScore
+    ) external onlyOracle agentExists(agentId) {
+        Agent storage agent = agents[agentId];
+        uint256 previousScore = agent.threatScore;
+
+        uint256 newScore = (EMA_ALPHA * rawScore + (EMA_SCALE - EMA_ALPHA) * previousScore) / EMA_SCALE;
+        agent.threatScore = newScore;
+
+        if (rawScore >= escalateThreshold) {
+            agent.strikes += 1;
+        }
+
+        if (agent.strikes >= maxStrikes) {
+            agent.active = false;
+            emit AgentDeactivated(agentId, "Auto-frozen: max strikes exceeded");
+        }
+
+        _updateENSRecords(agentId);
+
+        emit ThreatScoreUpdated(agentId, previousScore, newScore, rawScore, agent.strikes);
     }
 
     // ---------------------------------------------------------------

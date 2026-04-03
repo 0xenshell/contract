@@ -4,14 +4,17 @@ export async function setupAgentFirewall() {
   const connection = await hre.network.connect();
   const ethers = (connection as any).ethers;
 
-  const [owner, agent1, agent2, other] = await ethers.getSigners();
+  const [owner, agent1, agent2, oracle, other] = await ethers.getSigners();
 
   const MockENSResolver = await ethers.getContractFactory("MockENSResolver");
   const ensResolver = await MockENSResolver.deploy();
   await ensResolver.waitForDeployment();
 
   const AgentFirewall = await ethers.getContractFactory("AgentFirewall");
-  const firewall = await AgentFirewall.deploy(await ensResolver.getAddress());
+  const firewall = await AgentFirewall.deploy(
+    await ensResolver.getAddress(),
+    oracle.address,
+  );
   await firewall.waitForDeployment();
 
   return {
@@ -19,6 +22,7 @@ export async function setupAgentFirewall() {
     owner,
     agent1,
     agent2,
+    oracle,
     other,
     firewall,
     ensResolver,
