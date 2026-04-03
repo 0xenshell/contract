@@ -45,13 +45,13 @@ Register a parent name (e.g. `enshell.eth`) on https://sepolia.app.ens.domains. 
 
 ### 3. Deploy the contract
 
-The contract takes two constructor parameters:
-- `ensResolver` - Sepolia ENS Public Resolver: `0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5`
+Deploy parameters are stored in `ignition/parameters/sepolia.json`:
+- `ensResolver` - Sepolia ENS Public Resolver
 - `creOracle` - address authorized to update threat scores (use your deployer wallet until the CRE workflow is ready)
 
 ```bash
 npx hardhat ignition deploy ignition/modules/AgentFirewall.ts --network sepolia \
-  --parameters '{"AgentFirewall": {"ensResolver": "0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5", "creOracle": "0x8970bc47d1dBE7A7A43eC35b9EcAbEA88667bf7e"}}'
+  --parameters ignition/parameters/sepolia.json
 ```
 
 ### 4. Authorize the contract on ENS
