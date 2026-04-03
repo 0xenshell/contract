@@ -22,8 +22,8 @@ export default defineConfig({
     sepolia: {
       type: "http",
       chainType: "l1",
-      url: configVariable("SEPOLIA_RPC"),
-      accounts: [configVariable("DEPLOYER_PK")],
+      url: configVariable("ENSHELL_SEPOLIA_RPC"),
+      accounts: [configVariable("ENSHELL_DEPLOYER_PK")],
     },
   },
 });

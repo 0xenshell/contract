@@ -33,8 +33,8 @@ npx hardhat test --coverage
 ## Deploy
 
 ```bash
-npx hardhat keystore set SEPOLIA_RPC
-npx hardhat keystore set DEPLOYER_PK
+npx hardhat keystore set ENSHELL_SEPOLIA_RPC
+npx hardhat keystore set ENSHELL_DEPLOYER_PK
 npx hardhat ignition deploy ignition/modules/AgentFirewall.ts --network sepolia --parameters '{"AgentFirewall": {"ensResolver": "0x...", "creOracle": "0x..."}}'
 ```
 
