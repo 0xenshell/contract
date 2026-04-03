@@ -49,6 +49,8 @@ contract AgentFirewall is Ownable {
         bool    worldIdVerified
     );
 
+    event AgentDeactivated(string indexed agentId, string reason);
+
     // ---------------------------------------------------------------
     //  Modifiers
     // ---------------------------------------------------------------
@@ -94,6 +96,23 @@ contract AgentFirewall is Ownable {
         _updateENSRecords(agentId);
 
         emit AgentRegistered(agentId, ensNode, agentAddress, spendLimit, false);
+    }
+
+    // ---------------------------------------------------------------
+    //  Agent Lifecycle
+    // ---------------------------------------------------------------
+
+    function deactivateAgent(
+        string calldata agentId
+    ) external onlyOwner agentExists(agentId) {
+        agents[agentId].active = false;
+        emit AgentDeactivated(agentId, "Manual deactivation by owner");
+    }
+
+    function reactivateAgent(
+        string calldata agentId
+    ) external onlyOwner agentExists(agentId) {
+        agents[agentId].active = true;
     }
 
     // ---------------------------------------------------------------
