@@ -249,6 +249,26 @@ contract AgentFirewall is Ownable {
     }
 
     // ---------------------------------------------------------------
+    //  Ledger Approval
+    // ---------------------------------------------------------------
+
+    function approveAction(uint256 actionId) external onlyOwner {
+        QueuedAction storage action = actionQueue[actionId];
+        require(action.queuedAt != 0, "Action not found");
+        require(!action.resolved, "Already resolved");
+        action.resolved = true;
+        emit ActionApproved(actionId, action.agentId);
+    }
+
+    function rejectAction(uint256 actionId) external onlyOwner {
+        QueuedAction storage action = actionQueue[actionId];
+        require(action.queuedAt != 0, "Action not found");
+        require(!action.resolved, "Already resolved");
+        action.resolved = true;
+        emit ActionBlocked(actionId, action.agentId, "Rejected by owner via Ledger");
+    }
+
+    // ---------------------------------------------------------------
     //  View Functions
     // ---------------------------------------------------------------
 
