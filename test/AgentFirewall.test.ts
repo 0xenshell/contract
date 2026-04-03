@@ -124,4 +124,113 @@ describe("AgentFirewall", function () {
       ).to.be.revertedWith("Agent not found");
     });
   });
+
+  describe("deactivateAgent", function () {
+    beforeEach(async function () {
+      await firewall.registerAgentSimple(
+        "trader",
+        ensNode,
+        agent1.address,
+        ethers.parseEther("0.1"),
+      );
+    });
+
+    it("deactivates an agent", async function () {
+      await firewall.deactivateAgent("trader");
+      const agent = await firewall.getAgent("trader");
+      expect(agent.active).to.equal(false);
+    });
+
+    it("emits AgentDeactivated event", async function () {
+      await expect(firewall.deactivateAgent("trader"))
+        .to.emit(firewall, "AgentDeactivated")
+        .withArgs("trader", "Manual deactivation by owner");
+    });
+
+    it("reverts for non-existent agent", async function () {
+      await expect(
+        firewall.deactivateAgent("ghost"),
+      ).to.be.revertedWith("Agent not found");
+    });
+
+    it("reverts when called by non-owner", async function () {
+      await expect(
+        firewall.connect(other).deactivateAgent("trader"),
+      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+    });
+  });
+
+  describe("reactivateAgent", function () {
+    beforeEach(async function () {
+      await firewall.registerAgentSimple(
+        "trader",
+        ensNode,
+        agent1.address,
+        ethers.parseEther("0.1"),
+      );
+      await firewall.deactivateAgent("trader");
+    });
+
+    it("reactivates a deactivated agent", async function () {
+      await firewall.reactivateAgent("trader");
+      const agent = await firewall.getAgent("trader");
+      expect(agent.active).to.equal(true);
+    });
+
+    it("reverts when called by non-owner", async function () {
+      await expect(
+        firewall.connect(other).reactivateAgent("trader"),
+      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+    });
+  });
+
+  describe("allowedTargets", function () {
+    const target1 = "0x1111111111111111111111111111111111111111";
+    const target2 = "0x2222222222222222222222222222222222222222";
+
+    beforeEach(async function () {
+      await firewall.registerAgentSimple(
+        "trader",
+        ensNode,
+        agent1.address,
+        ethers.parseEther("0.1"),
+      );
+    });
+
+    it("sets a single allowed target", async function () {
+      await firewall.setAllowedTarget("trader", target1, true);
+      expect(await firewall.isTargetAllowed("trader", target1)).to.equal(true);
+      expect(await firewall.isTargetAllowed("trader", target2)).to.equal(false);
+    });
+
+    it("emits AllowedTargetUpdated event", async function () {
+      await expect(firewall.setAllowedTarget("trader", target1, true))
+        .to.emit(firewall, "AllowedTargetUpdated")
+        .withArgs("trader", target1, true);
+    });
+
+    it("revokes an allowed target", async function () {
+      await firewall.setAllowedTarget("trader", target1, true);
+      await firewall.setAllowedTarget("trader", target1, false);
+      expect(await firewall.isTargetAllowed("trader", target1)).to.equal(false);
+    });
+
+    it("sets multiple allowed targets in batch", async function () {
+      await firewall.setAllowedTargets("trader", [target1, target2], true);
+      expect(await firewall.isTargetAllowed("trader", target1)).to.equal(true);
+      expect(await firewall.isTargetAllowed("trader", target2)).to.equal(true);
+    });
+
+    it("reverts when called by non-owner", async function () {
+      await expect(
+        firewall.connect(other).setAllowedTarget("trader", target1, true),
+      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+    });
+
+    it("reverts for non-existent agent", async function () {
+      await expect(
+        firewall.setAllowedTarget("ghost", target1, true),
+      ).to.be.revertedWith("Agent not found");
+    });
+  });
 });
