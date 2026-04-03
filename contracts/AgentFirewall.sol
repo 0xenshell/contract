@@ -28,6 +28,17 @@ contract AgentFirewall is Ownable {
         uint256 registeredAt;
     }
 
+    struct QueuedAction {
+        string  agentId;
+        address target;
+        uint256 value;
+        bytes   data;
+        string  instruction;
+        uint256 threatScore;
+        uint256 queuedAt;
+        bool    resolved;
+    }
+
     // ---------------------------------------------------------------
     //  State
     // ---------------------------------------------------------------
@@ -37,7 +48,14 @@ contract AgentFirewall is Ownable {
 
     mapping(string => mapping(address => bool)) public allowedTargets;
 
+    mapping(uint256 => QueuedAction) public actionQueue;
+    uint256 public nextQueueId;
+
     IENSResolver public ensResolver;
+
+    uint256 public blockThreshold = 70_000;
+    uint256 public escalateThreshold = 40_000;
+    uint256 public maxStrikes = 5;
 
     // ---------------------------------------------------------------
     //  Events
@@ -57,6 +75,28 @@ contract AgentFirewall is Ownable {
         string  indexed agentId,
         address target,
         bool    allowed
+    );
+
+    event ActionSubmitted(
+        uint256 indexed actionId,
+        string  indexed agentId,
+        address target,
+        uint256 value,
+        string  instruction
+    );
+
+    event ActionApproved(uint256 indexed actionId, string indexed agentId);
+
+    event ActionBlocked(
+        uint256 indexed actionId,
+        string  indexed agentId,
+        string  reason
+    );
+
+    event ActionEscalated(
+        uint256 indexed actionId,
+        string  indexed agentId,
+        uint256 threatScore
     );
 
     // ---------------------------------------------------------------
