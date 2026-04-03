@@ -56,9 +56,17 @@ npx hardhat ignition deploy ignition/modules/AgentFirewall.ts --network sepolia 
 
 ### 4. Authorize the contract on ENS
 
-The firewall writes threat scores to ENS text records. It needs operator approval on the ENS Registry to write under your ENS name.
+The firewall writes threat scores to ENS text records. It needs operator approval on both the ENS Registry and NameWrapper to write under your ENS name.
 
-Call `setApprovalForAll(firewallContractAddress, true)` on the ENS Registry (`0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e`) from your deployer wallet.
+Run the approval script with the deployed firewall address:
+
+```bash
+FIREWALL_ADDRESS=0x... npx hardhat run scripts/approve-ens.ts --network sepolia
+```
+
+This calls `setApprovalForAll` on:
+- ENS Registry (`0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e`)
+- NameWrapper (`0x0635513f179D50A207757E05759CbD106d7dFcE8`)
 
 ## License
 
