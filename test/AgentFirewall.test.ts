@@ -5,6 +5,7 @@ describe("AgentFirewall", function () {
   let ethers: any;
   let owner: any;
   let agent1: any;
+  let oracle: any;
   let other: any;
   let firewall: any;
   let ensResolver: any;
@@ -16,6 +17,7 @@ describe("AgentFirewall", function () {
     ethers = env.ethers;
     owner = env.owner;
     agent1 = env.agent1;
+    oracle = env.oracle;
     other = env.other;
     firewall = env.firewall;
     ensResolver = env.ensResolver;
@@ -432,6 +434,81 @@ describe("AgentFirewall", function () {
       await expect(
         firewall.connect(other).rejectAction(0),
       ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+    });
+  });
+
+  describe("updateThreatScore", function () {
+    beforeEach(async function () {
+      await firewall.registerAgentSimple(
+        "trader",
+        ensNode,
+        agent1.address,
+        ethers.parseEther("0.1"),
+      );
+    });
+
+    it("computes EMA correctly on first update", async function () {
+      // EMA: (300 * 50000 + 700 * 0) / 1000 = 15000
+      await firewall.connect(oracle).updateThreatScore("trader", 50000);
+      const agent = await firewall.getAgent("trader");
+      expect(agent.threatScore).to.equal(15000);
+    });
+
+    it("computes EMA correctly on sequential updates", async function () {
+      // First: (300 * 50000 + 700 * 0) / 1000 = 15000
+      await firewall.connect(oracle).updateThreatScore("trader", 50000);
+      // Second: (300 * 50000 + 700 * 15000) / 1000 = 15000 + 10500 = 25500
+      await firewall.connect(oracle).updateThreatScore("trader", 50000);
+      const agent = await firewall.getAgent("trader");
+      expect(agent.threatScore).to.equal(25500);
+    });
+
+    it("increments strikes when raw score >= escalation threshold", async function () {
+      await firewall.connect(oracle).updateThreatScore("trader", 40000);
+      const agent = await firewall.getAgent("trader");
+      expect(agent.strikes).to.equal(1);
+    });
+
+    it("does not increment strikes when raw score is below threshold", async function () {
+      await firewall.connect(oracle).updateThreatScore("trader", 39999);
+      const agent = await firewall.getAgent("trader");
+      expect(agent.strikes).to.equal(0);
+    });
+
+    it("auto-freezes agent at max strikes", async function () {
+      for (let i = 0; i < 5; i++) {
+        await firewall.connect(oracle).updateThreatScore("trader", 40000);
+      }
+      const agent = await firewall.getAgent("trader");
+      expect(agent.active).to.equal(false);
+      expect(agent.strikes).to.equal(5);
+    });
+
+    it("updates ENS records", async function () {
+      await firewall.connect(oracle).updateThreatScore("trader", 50000);
+      // EMA = 15000, ENS stores raw value (no /EMA_SCALE in current impl)
+      expect(await ensResolver.text(ensNode, "threat-score")).to.equal("15000");
+      expect(await ensResolver.text(ensNode, "threat-strikes")).to.equal("1");
+    });
+
+    it("emits ThreatScoreUpdated event", async function () {
+      await expect(
+        firewall.connect(oracle).updateThreatScore("trader", 50000),
+      )
+        .to.emit(firewall, "ThreatScoreUpdated")
+        .withArgs("trader", 0, 15000, 50000, 1);
+    });
+
+    it("reverts when called by non-oracle", async function () {
+      await expect(
+        firewall.connect(other).updateThreatScore("trader", 50000),
+      ).to.be.revertedWith("Only CRE oracle");
+    });
+
+    it("reverts for non-existent agent", async function () {
+      await expect(
+        firewall.connect(oracle).updateThreatScore("ghost", 50000),
+      ).to.be.revertedWith("Agent not found");
     });
   });
 });
