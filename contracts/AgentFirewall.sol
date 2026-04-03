@@ -195,6 +195,60 @@ contract AgentFirewall is Ownable {
     }
 
     // ---------------------------------------------------------------
+    //  Action Submission (the firewall gate)
+    // ---------------------------------------------------------------
+
+    function submitAction(
+        string calldata agentId,
+        address target,
+        uint256 value,
+        bytes calldata data,
+        string calldata instruction
+    ) external agentExists(agentId) returns (uint256 actionId, uint8 status) {
+        Agent storage agent = agents[agentId];
+        require(agent.active, "Agent is frozen");
+
+        // Check if target is allowed
+        if (!allowedTargets[agentId][target]) {
+            actionId = _queueAction(agentId, target, value, data, instruction, agent.threatScore);
+            emit ActionEscalated(actionId, agentId, agent.threatScore);
+            return (actionId, 1);
+        }
+
+        // Check spend limit
+        if (value > agent.spendLimit) {
+            actionId = _queueAction(agentId, target, value, data, instruction, agent.threatScore);
+            emit ActionEscalated(actionId, agentId, agent.threatScore);
+            return (actionId, 1);
+        }
+
+        // Check strikes
+        if (agent.strikes >= maxStrikes) {
+            actionId = _queueAction(agentId, target, value, data, instruction, agent.threatScore);
+            emit ActionBlocked(actionId, agentId, "Max strikes exceeded");
+            return (actionId, 2);
+        }
+
+        // Check threat score
+        if (agent.threatScore >= blockThreshold) {
+            actionId = _queueAction(agentId, target, value, data, instruction, agent.threatScore);
+            emit ActionBlocked(actionId, agentId, "Threat score above block threshold");
+            return (actionId, 2);
+        }
+
+        if (agent.threatScore >= escalateThreshold) {
+            actionId = _queueAction(agentId, target, value, data, instruction, agent.threatScore);
+            emit ActionEscalated(actionId, agentId, agent.threatScore);
+            return (actionId, 1);
+        }
+
+        // All clear: auto-approve
+        emit ActionSubmitted(0, agentId, target, value, instruction);
+        emit ActionApproved(0, agentId);
+        return (0, 0);
+    }
+
+    // ---------------------------------------------------------------
     //  View Functions
     // ---------------------------------------------------------------
 
@@ -207,9 +261,36 @@ contract AgentFirewall is Ownable {
         return agentIds.length;
     }
 
+    function getQueuedAction(uint256 actionId) external view returns (QueuedAction memory) {
+        return actionQueue[actionId];
+    }
+
     // ---------------------------------------------------------------
     //  Internal Helpers
     // ---------------------------------------------------------------
+
+    function _queueAction(
+        string calldata agentId,
+        address target,
+        uint256 value,
+        bytes calldata data,
+        string calldata instruction,
+        uint256 currentThreatScore
+    ) internal returns (uint256 actionId) {
+        actionId = nextQueueId++;
+        actionQueue[actionId] = QueuedAction({
+            agentId: agentId,
+            target: target,
+            value: value,
+            data: data,
+            instruction: instruction,
+            threatScore: currentThreatScore,
+            queuedAt: block.timestamp,
+            resolved: false
+        });
+        emit ActionSubmitted(actionId, agentId, target, value, instruction);
+        return actionId;
+    }
 
     function _updateENSRecords(string calldata agentId) internal {
         Agent storage agent = agents[agentId];
