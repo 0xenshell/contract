@@ -35,6 +35,8 @@ contract AgentFirewall is Ownable {
     mapping(string => Agent) public agents;
     string[] public agentIds;
 
+    mapping(string => mapping(address => bool)) public allowedTargets;
+
     IENSResolver public ensResolver;
 
     // ---------------------------------------------------------------
@@ -50,6 +52,12 @@ contract AgentFirewall is Ownable {
     );
 
     event AgentDeactivated(string indexed agentId, string reason);
+
+    event AllowedTargetUpdated(
+        string  indexed agentId,
+        address target,
+        bool    allowed
+    );
 
     // ---------------------------------------------------------------
     //  Modifiers
@@ -113,6 +121,37 @@ contract AgentFirewall is Ownable {
         string calldata agentId
     ) external onlyOwner agentExists(agentId) {
         agents[agentId].active = true;
+    }
+
+    // ---------------------------------------------------------------
+    //  Allowed Targets
+    // ---------------------------------------------------------------
+
+    function setAllowedTarget(
+        string calldata agentId,
+        address target,
+        bool allowed
+    ) external onlyOwner agentExists(agentId) {
+        allowedTargets[agentId][target] = allowed;
+        emit AllowedTargetUpdated(agentId, target, allowed);
+    }
+
+    function setAllowedTargets(
+        string calldata agentId,
+        address[] calldata targets,
+        bool allowed
+    ) external onlyOwner agentExists(agentId) {
+        for (uint256 i = 0; i < targets.length; i++) {
+            allowedTargets[agentId][targets[i]] = allowed;
+            emit AllowedTargetUpdated(agentId, targets[i], allowed);
+        }
+    }
+
+    function isTargetAllowed(
+        string calldata agentId,
+        address target
+    ) external view returns (bool) {
+        return allowedTargets[agentId][target];
     }
 
     // ---------------------------------------------------------------
