@@ -233,4 +233,122 @@ describe("AgentFirewall", function () {
       ).to.be.revertedWith("Agent not found");
     });
   });
+
+  describe("submitAction", function () {
+    const target = "0x1111111111111111111111111111111111111111";
+    const data = "0x";
+
+    beforeEach(async function () {
+      await firewall.registerAgentSimple(
+        "trader",
+        ensNode,
+        agent1.address,
+        ethers.parseEther("0.1"),
+      );
+      await firewall.setAllowedTarget("trader", target, true);
+    });
+
+    it("auto-approves a clean action", async function () {
+      const tx = await firewall.submitAction(
+        "trader",
+        target,
+        ethers.parseEther("0.05"),
+        data,
+        "Send 0.05 ETH",
+      );
+
+      await expect(tx)
+        .to.emit(firewall, "ActionApproved")
+        .withArgs(0, "trader");
+    });
+
+    it("escalates when target is not allowed", async function () {
+      const unknownTarget = "0x9999999999999999999999999999999999999999";
+      const tx = await firewall.submitAction(
+        "trader",
+        unknownTarget,
+        ethers.parseEther("0.01"),
+        data,
+        "Send to unknown",
+      );
+
+      await expect(tx)
+        .to.emit(firewall, "ActionEscalated")
+        .withArgs(0, "trader", 0);
+
+      const queued = await firewall.getQueuedAction(0);
+      expect(queued.target).to.equal(unknownTarget);
+      expect(queued.resolved).to.equal(false);
+    });
+
+    it("escalates when value exceeds spend limit", async function () {
+      const tx = await firewall.submitAction(
+        "trader",
+        target,
+        ethers.parseEther("1.0"),
+        data,
+        "Big spend",
+      );
+
+      await expect(tx)
+        .to.emit(firewall, "ActionEscalated")
+        .withArgs(0, "trader", 0);
+    });
+
+    it("blocks when agent has max strikes", async function () {
+      // Directly set strikes to maxStrikes (5) by manipulating via a future
+      // threat score update feature. For now, we test by lowering maxStrikes.
+      await firewall.setMaxStrikes(0);
+
+      const tx = await firewall.submitAction(
+        "trader",
+        target,
+        ethers.parseEther("0.01"),
+        data,
+        "Should be blocked",
+      );
+
+      await expect(tx)
+        .to.emit(firewall, "ActionBlocked")
+        .withArgs(0, "trader", "Max strikes exceeded");
+    });
+
+    it("reverts when agent is frozen", async function () {
+      await firewall.deactivateAgent("trader");
+
+      await expect(
+        firewall.submitAction(
+          "trader",
+          target,
+          ethers.parseEther("0.01"),
+          data,
+          "Frozen agent",
+        ),
+      ).to.be.revertedWith("Agent is frozen");
+    });
+
+    it("reverts for non-existent agent", async function () {
+      await expect(
+        firewall.submitAction(
+          "ghost",
+          target,
+          ethers.parseEther("0.01"),
+          data,
+          "No agent",
+        ),
+      ).to.be.revertedWith("Agent not found");
+    });
+
+    it("increments queue ID for each queued action", async function () {
+      const unknownTarget = "0x9999999999999999999999999999999999999999";
+
+      await firewall.submitAction("trader", unknownTarget, 0, data, "first");
+      await firewall.submitAction("trader", unknownTarget, 0, data, "second");
+
+      const first = await firewall.getQueuedAction(0);
+      const second = await firewall.getQueuedAction(1);
+      expect(first.instruction).to.equal("first");
+      expect(second.instruction).to.equal("second");
+    });
+  });
 });
