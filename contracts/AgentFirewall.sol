@@ -339,6 +339,10 @@ contract AgentFirewall is Ownable {
         maxStrikes = _max;
     }
 
+    function setENSResolver(address _ensResolver) external onlyOwner {
+        ensResolver = IENSResolver(_ensResolver);
+    }
+
     // ---------------------------------------------------------------
     //  Internal Helpers
     // ---------------------------------------------------------------
