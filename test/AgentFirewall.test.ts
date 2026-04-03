@@ -351,4 +351,87 @@ describe("AgentFirewall", function () {
       expect(second.instruction).to.equal("second");
     });
   });
+
+  describe("approveAction", function () {
+    const target = "0x9999999999999999999999999999999999999999";
+    const data = "0x";
+
+    beforeEach(async function () {
+      await firewall.registerAgentSimple(
+        "trader",
+        ensNode,
+        agent1.address,
+        ethers.parseEther("0.1"),
+      );
+      // Submit to disallowed target so it gets queued
+      await firewall.submitAction("trader", target, 0, data, "queued action");
+    });
+
+    it("approves a queued action", async function () {
+      const tx = await firewall.approveAction(0);
+      await expect(tx)
+        .to.emit(firewall, "ActionApproved")
+        .withArgs(0, "trader");
+
+      const queued = await firewall.getQueuedAction(0);
+      expect(queued.resolved).to.equal(true);
+    });
+
+    it("reverts on double resolve", async function () {
+      await firewall.approveAction(0);
+      await expect(
+        firewall.approveAction(0),
+      ).to.be.revertedWith("Already resolved");
+    });
+
+    it("reverts for non-existent action", async function () {
+      await expect(
+        firewall.approveAction(999),
+      ).to.be.revertedWith("Action not found");
+    });
+
+    it("reverts when called by non-owner", async function () {
+      await expect(
+        firewall.connect(other).approveAction(0),
+      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+    });
+  });
+
+  describe("rejectAction", function () {
+    const target = "0x9999999999999999999999999999999999999999";
+    const data = "0x";
+
+    beforeEach(async function () {
+      await firewall.registerAgentSimple(
+        "trader",
+        ensNode,
+        agent1.address,
+        ethers.parseEther("0.1"),
+      );
+      await firewall.submitAction("trader", target, 0, data, "queued action");
+    });
+
+    it("rejects a queued action", async function () {
+      const tx = await firewall.rejectAction(0);
+      await expect(tx)
+        .to.emit(firewall, "ActionBlocked")
+        .withArgs(0, "trader", "Rejected by owner via Ledger");
+
+      const queued = await firewall.getQueuedAction(0);
+      expect(queued.resolved).to.equal(true);
+    });
+
+    it("reverts on double resolve", async function () {
+      await firewall.rejectAction(0);
+      await expect(
+        firewall.rejectAction(0),
+      ).to.be.revertedWith("Already resolved");
+    });
+
+    it("reverts when called by non-owner", async function () {
+      await expect(
+        firewall.connect(other).rejectAction(0),
+      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+    });
+  });
 });
