@@ -111,6 +111,14 @@ contract AgentFirewall is Ownable {
         uint256 strikes
     );
 
+    event TrustChecked(
+        string  indexed checkerAgentId,
+        string  indexed targetAgentId,
+        uint256 threatScore,
+        uint256 strikes,
+        bool    trusted
+    );
+
     // ---------------------------------------------------------------
     //  Modifiers
     // ---------------------------------------------------------------
@@ -311,6 +319,32 @@ contract AgentFirewall is Ownable {
         _updateENSRecords(agentId);
 
         emit ThreatScoreUpdated(agentId, previousScore, newScore, rawScore, agent.strikes);
+    }
+
+    // ---------------------------------------------------------------
+    //  Trust Mesh
+    // ---------------------------------------------------------------
+
+    /// @notice Check if a target agent is trusted. Emits TrustChecked event.
+    function checkTrust(
+        string calldata checkerAgentId,
+        string calldata targetAgentId
+    ) external agentExists(checkerAgentId) agentExists(targetAgentId) returns (bool trusted) {
+        trusted = isTrusted(targetAgentId);
+        Agent storage target = agents[targetAgentId];
+        emit TrustChecked(checkerAgentId, targetAgentId, target.threatScore, target.strikes, trusted);
+        return trusted;
+    }
+
+    /// @notice View whether an agent is trusted (active, below thresholds).
+    function isTrusted(
+        string calldata agentId
+    ) public view agentExists(agentId) returns (bool) {
+        Agent storage agent = agents[agentId];
+        if (!agent.active) return false;
+        if (agent.threatScore >= blockThreshold) return false;
+        if (agent.strikes >= maxStrikes) return false;
+        return true;
     }
 
     // ---------------------------------------------------------------
