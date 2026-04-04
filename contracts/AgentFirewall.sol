@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 
 /// @title ENShell AgentFirewall
 /// @notice On-chain firewall for AI agents. Registry, scoring, and event layer.
@@ -15,7 +16,7 @@ interface INameWrapper {
     function setSubnodeRecord(bytes32 parentNode, string calldata label, address owner, address resolver, uint64 ttl, uint32 fuses, uint64 expiry) external returns (bytes32);
 }
 
-contract AgentFirewall is Ownable {
+contract AgentFirewall is Ownable, IERC1155Receiver {
 
     // ---------------------------------------------------------------
     //  Structs
@@ -284,10 +285,22 @@ contract AgentFirewall is Ownable {
         _updateThreatScore(agentId, rawThreatScore);
     }
 
-    /// @notice ERC165 interface detection for IReceiver
+    /// @notice ERC165 interface detection for IReceiver + ERC1155Receiver
     function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
-        // IReceiver interface ID
-        return interfaceId == 0x805f2132 || interfaceId == 0x01ffc9a7;
+        return interfaceId == 0x805f2132  // IReceiver (Chainlink CRE)
+            || interfaceId == 0x01ffc9a7  // ERC165
+            || interfaceId == 0x4e2312e0; // ERC1155Receiver
+    }
+
+    /// @notice Required by ERC1155 — allows contract to receive ENS NameWrapper tokens
+    function onERC1155Received(address, address, uint256, uint256, bytes calldata)
+        external pure returns (bytes4) {
+        return this.onERC1155Received.selector;
+    }
+
+    function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata)
+        external pure returns (bytes4) {
+        return this.onERC1155BatchReceived.selector;
     }
 
     // ---------------------------------------------------------------
