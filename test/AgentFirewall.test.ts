@@ -144,7 +144,7 @@ describe("AgentFirewall", function () {
     it("reverts when called by non-owner", async function () {
       await expect(
         firewall.connect(other).deactivateAgent("trader"),
-      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+      ).to.be.revertedWith("Not agent or contract owner");
     });
   });
 
@@ -167,7 +167,7 @@ describe("AgentFirewall", function () {
     it("reverts when called by non-owner", async function () {
       await expect(
         firewall.connect(other).reactivateAgent("trader"),
-      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+      ).to.be.revertedWith("Not agent or contract owner");
     });
   });
 
@@ -210,7 +210,7 @@ describe("AgentFirewall", function () {
     it("reverts when called by non-owner", async function () {
       await expect(
         firewall.connect(other).setAllowedTarget("trader", target1, true),
-      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+      ).to.be.revertedWith("Not agent or contract owner");
     });
 
     it("reverts for non-existent agent", async function () {

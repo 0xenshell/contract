@@ -25,6 +25,7 @@ contract AgentFirewall is Ownable, IERC1155Receiver {
     struct Agent {
         bytes32 ensNode;
         address agentAddress;
+        address owner;
         uint256 spendLimit;
         uint256 threatScore;
         uint256 strikes;
@@ -75,6 +76,7 @@ contract AgentFirewall is Ownable, IERC1155Receiver {
     event AgentRegistered(
         string indexed agentId,
         bytes32 ensNode,
+        address owner,
         address agentAddress,
         uint256 spendLimit,
         bool    worldIdVerified
@@ -140,6 +142,19 @@ contract AgentFirewall is Ownable, IERC1155Receiver {
         _;
     }
 
+    modifier onlyAgentOwner(string calldata agentId) {
+        require(agents[agentId].owner == msg.sender, "Not agent owner");
+        _;
+    }
+
+    modifier onlyAgentOrContractOwner(string calldata agentId) {
+        require(
+            agents[agentId].owner == msg.sender || msg.sender == owner(),
+            "Not agent or contract owner"
+        );
+        _;
+    }
+
     // ---------------------------------------------------------------
     //  Constructor
     // ---------------------------------------------------------------
@@ -186,6 +201,7 @@ contract AgentFirewall is Ownable, IERC1155Receiver {
         agents[agentId] = Agent({
             ensNode: ensNode,
             agentAddress: agentAddress,
+            owner: msg.sender,
             spendLimit: spendLimit,
             threatScore: 0,
             strikes: 0,
@@ -197,7 +213,7 @@ contract AgentFirewall is Ownable, IERC1155Receiver {
         agentIds.push(agentId);
         _updateENSRecords(agentId);
 
-        emit AgentRegistered(agentId, ensNode, agentAddress, spendLimit, false);
+        emit AgentRegistered(agentId, ensNode, msg.sender, agentAddress, spendLimit, false);
     }
 
     // ---------------------------------------------------------------
@@ -206,14 +222,14 @@ contract AgentFirewall is Ownable, IERC1155Receiver {
 
     function deactivateAgent(
         string calldata agentId
-    ) external onlyOwner agentExists(agentId) {
+    ) external agentExists(agentId) onlyAgentOrContractOwner(agentId) {
         agents[agentId].active = false;
         emit AgentDeactivated(agentId, "Manual deactivation by owner");
     }
 
     function reactivateAgent(
         string calldata agentId
-    ) external onlyOwner agentExists(agentId) {
+    ) external agentExists(agentId) onlyAgentOrContractOwner(agentId) {
         agents[agentId].active = true;
     }
 
@@ -225,7 +241,7 @@ contract AgentFirewall is Ownable, IERC1155Receiver {
         string calldata agentId,
         address target,
         bool allowed
-    ) external onlyOwner agentExists(agentId) {
+    ) external agentExists(agentId) onlyAgentOrContractOwner(agentId) {
         allowedTargets[agentId][target] = allowed;
         emit AllowedTargetUpdated(agentId, target, allowed);
     }
@@ -234,7 +250,7 @@ contract AgentFirewall is Ownable, IERC1155Receiver {
         string calldata agentId,
         address[] calldata targets,
         bool allowed
-    ) external onlyOwner agentExists(agentId) {
+    ) external agentExists(agentId) onlyAgentOrContractOwner(agentId) {
         for (uint256 i = 0; i < targets.length; i++) {
             allowedTargets[agentId][targets[i]] = allowed;
             emit AllowedTargetUpdated(agentId, targets[i], allowed);
@@ -261,7 +277,7 @@ contract AgentFirewall is Ownable, IERC1155Receiver {
         uint256 value,
         bytes calldata data,
         bytes32 instructionHash
-    ) external agentExists(agentId) returns (uint256 actionId) {
+    ) external agentExists(agentId) onlyAgentOwner(agentId) returns (uint256 actionId) {
         Agent storage agent = agents[agentId];
         require(agent.active, "Agent is frozen");
         require(agent.strikes < maxStrikes, "Max strikes exceeded");
