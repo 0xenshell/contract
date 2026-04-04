@@ -139,10 +139,10 @@ async function main() {
         let category: string;
 
         const promptRoll = Math.random();
-        if (promptRoll < 0.70) {
+        if (promptRoll < 0.55) {
           chosen = pickRandom(SAFE_PROMPTS);
           category = "safe";
-        } else if (promptRoll < 0.90) {
+        } else if (promptRoll < 0.85) {
           chosen = pickRandom(SUSPICIOUS_PROMPTS);
           category = "suspicious";
         } else {

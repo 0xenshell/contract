@@ -85,6 +85,7 @@ async function main() {
             body: JSON.stringify({
               ensName: `${agentId}.enshell.eth`,
               address: signer.address,
+              owner: signer.address,
               spendLimit: "1.0",
               active: true,
             }),
