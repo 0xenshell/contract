@@ -33,10 +33,10 @@ contract AgentFirewall is Ownable {
         address target;
         uint256 value;
         bytes   data;
-        string  instruction;
-        uint256 threatScore;
+        bytes32 instructionHash;
         uint256 queuedAt;
         bool    resolved;
+        uint8   decision;       // 0 = pending, 1 = approved, 2 = escalated, 3 = blocked
     }
 
     // ---------------------------------------------------------------
@@ -86,7 +86,7 @@ contract AgentFirewall is Ownable {
         string  indexed agentId,
         address target,
         uint256 value,
-        string  instruction
+        bytes32 instructionHash
     );
 
     event ActionApproved(uint256 indexed actionId, string indexed agentId);
@@ -213,57 +213,25 @@ contract AgentFirewall is Ownable {
     }
 
     // ---------------------------------------------------------------
-    //  Action Submission (the firewall gate)
+    //  Action Submission
     // ---------------------------------------------------------------
 
+    /// @notice Submit an action for CRE analysis. Basic policy checks are applied
+    ///         as circuit breakers; all passing actions are queued for the CRE oracle
+    ///         to resolve (approve / escalate / block).
     function submitAction(
         string calldata agentId,
         address target,
         uint256 value,
         bytes calldata data,
-        string calldata instruction
-    ) external agentExists(agentId) returns (uint256 actionId, uint8 status) {
+        bytes32 instructionHash
+    ) external agentExists(agentId) returns (uint256 actionId) {
         Agent storage agent = agents[agentId];
         require(agent.active, "Agent is frozen");
+        require(agent.strikes < maxStrikes, "Max strikes exceeded");
 
-        // Check if target is allowed
-        if (!allowedTargets[agentId][target]) {
-            actionId = _queueAction(agentId, target, value, data, instruction, agent.threatScore);
-            emit ActionEscalated(actionId, agentId, agent.threatScore);
-            return (actionId, 1);
-        }
-
-        // Check spend limit
-        if (value > agent.spendLimit) {
-            actionId = _queueAction(agentId, target, value, data, instruction, agent.threatScore);
-            emit ActionEscalated(actionId, agentId, agent.threatScore);
-            return (actionId, 1);
-        }
-
-        // Check strikes
-        if (agent.strikes >= maxStrikes) {
-            actionId = _queueAction(agentId, target, value, data, instruction, agent.threatScore);
-            emit ActionBlocked(actionId, agentId, "Max strikes exceeded");
-            return (actionId, 2);
-        }
-
-        // Check threat score
-        if (agent.threatScore >= blockThreshold) {
-            actionId = _queueAction(agentId, target, value, data, instruction, agent.threatScore);
-            emit ActionBlocked(actionId, agentId, "Threat score above block threshold");
-            return (actionId, 2);
-        }
-
-        if (agent.threatScore >= escalateThreshold) {
-            actionId = _queueAction(agentId, target, value, data, instruction, agent.threatScore);
-            emit ActionEscalated(actionId, agentId, agent.threatScore);
-            return (actionId, 1);
-        }
-
-        // All clear: auto-approve
-        emit ActionSubmitted(0, agentId, target, value, instruction);
-        emit ActionApproved(0, agentId);
-        return (0, 0);
+        actionId = _queueAction(agentId, target, value, data, instructionHash);
+        return actionId;
     }
 
     // ---------------------------------------------------------------
@@ -352,8 +320,7 @@ contract AgentFirewall is Ownable {
         address target,
         uint256 value,
         bytes calldata data,
-        string calldata instruction,
-        uint256 currentThreatScore
+        bytes32 instructionHash
     ) internal returns (uint256 actionId) {
         actionId = nextQueueId++;
         actionQueue[actionId] = QueuedAction({
@@ -361,12 +328,12 @@ contract AgentFirewall is Ownable {
             target: target,
             value: value,
             data: data,
-            instruction: instruction,
-            threatScore: currentThreatScore,
+            instructionHash: instructionHash,
             queuedAt: block.timestamp,
-            resolved: false
+            resolved: false,
+            decision: 0
         });
-        emit ActionSubmitted(actionId, agentId, target, value, instruction);
+        emit ActionSubmitted(actionId, agentId, target, value, instructionHash);
         return actionId;
     }
 
