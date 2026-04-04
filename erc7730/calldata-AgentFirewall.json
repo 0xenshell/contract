@@ -1,7 +1,7 @@
 {
   "$schema": "https://github.com/LedgerHQ/clear-signing-erc7730-registry/raw/master/specs/erc7730-v1.schema.json",
   "context": {
-    "$id": "ENShell AgentFirewall",
+    "$id": "ENShell",
     "contract": {
       "deployments": [
         {
