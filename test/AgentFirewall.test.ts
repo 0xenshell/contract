@@ -421,10 +421,10 @@ describe("AgentFirewall", function () {
       ).to.be.revertedWith("Action not found");
     });
 
-    it("reverts when called by non-owner", async function () {
+    it("reverts when called by non-agent-owner", async function () {
       await expect(
         firewall.connect(other).approveAction(0),
-      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+      ).to.be.revertedWith("Not agent owner");
     });
   });
 
@@ -451,7 +451,7 @@ describe("AgentFirewall", function () {
       const tx = await firewall.rejectAction(0);
       await expect(tx)
         .to.emit(firewall, "ActionBlocked")
-        .withArgs(0, "trader", "Rejected by owner via Ledger");
+        .withArgs(0, "trader", "Rejected by agent owner");
 
       const queued = await firewall.getQueuedAction(0);
       expect(queued.resolved).to.equal(true);
@@ -471,10 +471,10 @@ describe("AgentFirewall", function () {
       ).to.be.revertedWith("Already resolved");
     });
 
-    it("reverts when called by non-owner", async function () {
+    it("reverts when called by non-agent-owner", async function () {
       await expect(
         firewall.connect(other).rejectAction(0),
-      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+      ).to.be.revertedWith("Not agent owner");
     });
   });
 

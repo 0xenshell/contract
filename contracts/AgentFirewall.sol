@@ -323,22 +323,24 @@ contract AgentFirewall is Ownable, IERC1155Receiver {
     //  Ledger Approval (for escalated actions only)
     // ---------------------------------------------------------------
 
-    function approveAction(uint256 actionId) external onlyOwner {
+    function approveAction(uint256 actionId) external {
         QueuedAction storage action = actionQueue[actionId];
         require(action.queuedAt != 0, "Action not found");
         require(action.decision == 2, "Action not escalated");
         require(!action.resolved, "Already resolved");
+        require(agents[action.agentId].owner == msg.sender, "Not agent owner");
         action.resolved = true;
         emit ActionApproved(actionId, action.agentId);
     }
 
-    function rejectAction(uint256 actionId) external onlyOwner {
+    function rejectAction(uint256 actionId) external {
         QueuedAction storage action = actionQueue[actionId];
         require(action.queuedAt != 0, "Action not found");
         require(action.decision == 2, "Action not escalated");
         require(!action.resolved, "Already resolved");
+        require(agents[action.agentId].owner == msg.sender, "Not agent owner");
         action.resolved = true;
-        emit ActionBlocked(actionId, action.agentId, "Rejected by owner via Ledger");
+        emit ActionBlocked(actionId, action.agentId, "Rejected by agent owner");
     }
 
     // ---------------------------------------------------------------
