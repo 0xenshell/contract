@@ -15,6 +15,7 @@ import { Wallet, JsonRpcProvider, keccak256, toUtf8Bytes } from "ethers";
 import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import { encryptForOracle, NETWORK_CONFIG, Network } from "@enshell/sdk";
 import {
   SAFE_PROMPTS, SUSPICIOUS_PROMPTS, MALICIOUS_PROMPTS,
   SAFE_TARGETS, SUSPICIOUS_TARGETS, MALICIOUS_TARGETS,
@@ -22,7 +23,8 @@ import {
 } from "./prompts.js";
 
 const CRE_SIMULATE = path.resolve(process.env.HOME || "~", "www/enshell-cre-workflow/simulate.sh");
-const RELAY_URL = "https://relay.enshell.xyz";
+const RELAY_URL = NETWORK_CONFIG[Network.SEPOLIA].relayUrl;
+const ORACLE_PUBLIC_KEY = NETWORK_CONFIG[Network.SEPOLIA].oraclePublicKey;
 
 // Configurable delays via env
 const MIN_DELAY = parseInt(process.env.MIN_DELAY_S || "300", 10) * 1000;
@@ -73,7 +75,7 @@ async function main() {
   const rpcUrl = envContent.match(/ENSHELL_RPC_URL=(.+)/)?.[1] || "https://ethereum-sepolia-rpc.publicnode.com";
   const provider = new JsonRpcProvider(rpcUrl);
 
-  const contractAddress = "0x3886791bd82ff55294FaaEcCe3624A2376978dB2";
+  const contractAddress = NETWORK_CONFIG[Network.SEPOLIA].firewallAddress;
   const firewall = await ethers.getContractAt("AgentFirewall", contractAddress);
 
   // Build agent list from contract
@@ -179,12 +181,13 @@ async function main() {
 
         log(COLORS.gray, `  → Action #${actionId} submitted (tx: ${tx.hash.slice(0, 14)}...)`);
 
-        // Post encrypted payload to relay (simplified — just the instruction for the CRE)
+        // Encrypt instruction and post to relay for CRE to fetch
         try {
+          const encrypted = encryptForOracle(prompt.instruction, ORACLE_PUBLIC_KEY);
           await fetch(`${RELAY_URL}/relay/${instructionHash.slice(2)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ encrypted: Buffer.from(prompt.instruction).toString("hex") }),
+            body: JSON.stringify({ encryptedPayload: encrypted }),
           });
         } catch { /* relay optional */ }
 

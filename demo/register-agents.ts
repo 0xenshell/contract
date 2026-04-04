@@ -1,9 +1,10 @@
 import hre from "hardhat";
 import { Wallet, JsonRpcProvider } from "ethers";
+import { NETWORK_CONFIG, Network } from "@enshell/sdk";
 import * as fs from "fs";
 import * as path from "path";
 
-const RELAY_URL = "https://relay.enshell.xyz";
+const RELAY_URL = NETWORK_CONFIG[Network.SEPOLIA].relayUrl;
 
 const AGENT_SUFFIXES: Record<string, string[]> = {
   alice: ["trader", "scanner", "keeper", "vault"],
@@ -47,7 +48,7 @@ async function main() {
   const provider = new JsonRpcProvider(rpcUrl);
 
   // Get the firewall contract
-  const contractAddress = "0x3886791bd82ff55294FaaEcCe3624A2376978dB2";
+  const contractAddress = NETWORK_CONFIG[Network.SEPOLIA].firewallAddress;
   const firewall = await ethers.getContractAt("AgentFirewall", contractAddress);
 
   console.log(`Registering agents on ${contractAddress}...\n`);
