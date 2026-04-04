@@ -221,8 +221,13 @@ async function main() {
             log(COLORS.yellow, `  → Unknown CRE result: ${output.slice(-200)}`);
           }
         } catch (err: any) {
-          const errMsg = err.stderr?.toString() || err.stdout?.toString() || err.message;
-          log(COLORS.red, `  → CRE simulation failed: ${errMsg?.slice(0, 300)}`);
+          const stderr = err.stderr?.toString()?.trim() || "";
+          const stdout = err.stdout?.toString()?.trim() || "";
+          const fullOutput = stdout + "\n" + stderr;
+          // Show last 500 chars which usually contains the actual error
+          const tail = fullOutput.slice(-500).trim();
+          log(COLORS.red, `  → CRE simulation failed:`);
+          console.log(COLORS.gray + tail + COLORS.reset);
         }
 
         actionCount++;
