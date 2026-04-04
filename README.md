@@ -53,7 +53,7 @@ npx hardhat run scripts/wrap-ens.ts --network sepolia
 
 Deploy parameters are stored in `ignition/parameters/sepolia.json`:
 - `ensResolver` - Sepolia ENS Public Resolver
-- `creOracle` - address authorized to update threat scores (use your deployer wallet until the CRE workflow is ready)
+- `forwarder` - Chainlink KeystoneForwarder address (MockForwarder for simulation, KeystoneForwarder for production)
 
 ```bash
 npx hardhat ignition deploy ignition/modules/AgentFirewall.ts --network sepolia \

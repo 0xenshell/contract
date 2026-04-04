@@ -1,6 +1,6 @@
 {
   "AgentFirewall": {
     "ensResolver": "0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5",
-    "creOracle": "0x8970bc47d1dBE7A7A43eC35b9EcAbEA88667bf7e"
+    "forwarder": "0x15fC6ae953E024d975e77382eEeC56A9101f9F88"
   }
 }
