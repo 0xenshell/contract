@@ -372,6 +372,18 @@ contract AgentFirewall is Ownable {
         maxStrikes = _max;
     }
 
+    function setBlockThreshold(uint256 _threshold) external onlyOwner {
+        blockThreshold = _threshold;
+    }
+
+    function setEscalateThreshold(uint256 _threshold) external onlyOwner {
+        escalateThreshold = _threshold;
+    }
+
+    function setCreOracle(address _creOracle) external onlyOwner {
+        creOracle = _creOracle;
+    }
+
     function setENSResolver(address _ensResolver) external onlyOwner {
         ensResolver = IENSResolver(_ensResolver);
     }
