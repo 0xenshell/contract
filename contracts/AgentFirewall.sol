@@ -52,7 +52,7 @@ contract AgentFirewall is Ownable {
     uint256 public nextQueueId;
 
     IENSResolver public ensResolver;
-    address public creOracle;
+    address public forwarder;
 
     uint256 public blockThreshold = 70_000;
     uint256 public escalateThreshold = 40_000;
@@ -123,8 +123,8 @@ contract AgentFirewall is Ownable {
     //  Modifiers
     // ---------------------------------------------------------------
 
-    modifier onlyOracle() {
-        require(msg.sender == creOracle, "Only CRE oracle");
+    modifier onlyForwarder() {
+        require(msg.sender == forwarder, "Only CRE forwarder");
         _;
     }
 
@@ -137,9 +137,9 @@ contract AgentFirewall is Ownable {
     //  Constructor
     // ---------------------------------------------------------------
 
-    constructor(address _ensResolver, address _creOracle) Ownable(msg.sender) {
+    constructor(address _ensResolver, address _forwarder) Ownable(msg.sender) {
         ensResolver = IENSResolver(_ensResolver);
-        creOracle = _creOracle;
+        forwarder = _forwarder;
     }
 
     // ---------------------------------------------------------------
@@ -243,32 +243,24 @@ contract AgentFirewall is Ownable {
     }
 
     // ---------------------------------------------------------------
-    //  CRE Oracle Resolution
+    //  CRE Report Receiver (Chainlink KeystoneForwarder)
     // ---------------------------------------------------------------
 
-    /// @notice CRE oracle resolves a queued action after off-chain analysis.
-    /// @param actionId The queued action ID
-    /// @param decision 1 = approve, 2 = escalate (to Ledger owner), 3 = block
-    function resolveAction(
-        uint256 actionId,
-        uint8 decision
-    ) external onlyOracle {
-        QueuedAction storage action = actionQueue[actionId];
-        require(action.queuedAt != 0, "Action not found");
-        require(action.decision == 0, "Already resolved");
-        require(decision >= 1 && decision <= 3, "Invalid decision");
+    /// @notice Called by the KeystoneForwarder with the CRE workflow report.
+    ///         Decodes the report and resolves the action + updates threat score.
+    /// @param report ABI-encoded: (string agentId, uint256 actionId, uint8 decision, uint256 rawThreatScore)
+    function onReport(bytes calldata /* metadata */, bytes calldata report) external onlyForwarder {
+        (string memory agentId, uint256 actionId, uint8 decision, uint256 rawThreatScore) =
+            abi.decode(report, (string, uint256, uint8, uint256));
 
-        action.decision = decision;
+        _resolveAction(actionId, decision);
+        _updateThreatScore(agentId, rawThreatScore);
+    }
 
-        if (decision == 1) {
-            action.resolved = true;
-            emit ActionApproved(actionId, action.agentId);
-        } else if (decision == 2) {
-            emit ActionEscalated(actionId, action.agentId, agents[action.agentId].threatScore);
-        } else {
-            action.resolved = true;
-            emit ActionBlocked(actionId, action.agentId, "Blocked by CRE oracle");
-        }
+    /// @notice ERC165 interface detection for IReceiver
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        // IReceiver interface ID
+        return interfaceId == 0x805f2132 || interfaceId == 0x01ffc9a7;
     }
 
     // ---------------------------------------------------------------
@@ -294,32 +286,8 @@ contract AgentFirewall is Ownable {
     }
 
     // ---------------------------------------------------------------
-    //  Threat Score Updates (CRE oracle)
+    //  (Threat score + resolution are now internal, called via onReport)
     // ---------------------------------------------------------------
-
-    function updateThreatScore(
-        string calldata agentId,
-        uint256 rawScore
-    ) external onlyOracle agentExists(agentId) {
-        Agent storage agent = agents[agentId];
-        uint256 previousScore = agent.threatScore;
-
-        uint256 newScore = (EMA_ALPHA * rawScore + (EMA_SCALE - EMA_ALPHA) * previousScore) / EMA_SCALE;
-        agent.threatScore = newScore;
-
-        if (rawScore >= escalateThreshold) {
-            agent.strikes += 1;
-        }
-
-        if (agent.strikes >= maxStrikes) {
-            agent.active = false;
-            emit AgentDeactivated(agentId, "Auto-frozen: max strikes exceeded");
-        }
-
-        _updateENSRecords(agentId);
-
-        emit ThreatScoreUpdated(agentId, previousScore, newScore, rawScore, agent.strikes);
-    }
 
     // ---------------------------------------------------------------
     //  Trust Mesh
@@ -380,8 +348,8 @@ contract AgentFirewall is Ownable {
         escalateThreshold = _threshold;
     }
 
-    function setCreOracle(address _creOracle) external onlyOwner {
-        creOracle = _creOracle;
+    function setForwarder(address _forwarder) external onlyOwner {
+        forwarder = _forwarder;
     }
 
     function setENSResolver(address _ensResolver) external onlyOwner {
@@ -391,6 +359,47 @@ contract AgentFirewall is Ownable {
     // ---------------------------------------------------------------
     //  Internal Helpers
     // ---------------------------------------------------------------
+
+    function _resolveAction(uint256 actionId, uint8 decision) internal {
+        QueuedAction storage action = actionQueue[actionId];
+        require(action.queuedAt != 0, "Action not found");
+        require(action.decision == 0, "Already resolved");
+        require(decision >= 1 && decision <= 3, "Invalid decision");
+
+        action.decision = decision;
+
+        if (decision == 1) {
+            action.resolved = true;
+            emit ActionApproved(actionId, action.agentId);
+        } else if (decision == 2) {
+            emit ActionEscalated(actionId, action.agentId, agents[action.agentId].threatScore);
+        } else {
+            action.resolved = true;
+            emit ActionBlocked(actionId, action.agentId, "Blocked by CRE oracle");
+        }
+    }
+
+    function _updateThreatScore(string memory agentId, uint256 rawScore) internal {
+        Agent storage agent = agents[agentId];
+        require(agent.registeredAt != 0, "Agent not found");
+        uint256 previousScore = agent.threatScore;
+
+        uint256 newScore = (EMA_ALPHA * rawScore + (EMA_SCALE - EMA_ALPHA) * previousScore) / EMA_SCALE;
+        agent.threatScore = newScore;
+
+        if (rawScore >= escalateThreshold) {
+            agent.strikes += 1;
+        }
+
+        if (agent.strikes >= maxStrikes) {
+            agent.active = false;
+            emit AgentDeactivated(agentId, "Auto-frozen: max strikes exceeded");
+        }
+
+        _updateENSRecords(agentId);
+
+        emit ThreatScoreUpdated(agentId, previousScore, newScore, rawScore, agent.strikes);
+    }
 
     function _queueAction(
         string calldata agentId,
@@ -414,7 +423,7 @@ contract AgentFirewall is Ownable {
         return actionId;
     }
 
-    function _updateENSRecords(string calldata agentId) internal {
+    function _updateENSRecords(string memory agentId) internal {
         Agent storage agent = agents[agentId];
         ensResolver.setText(agent.ensNode, "threat-score", _uint2str(agent.threatScore));
         ensResolver.setText(agent.ensNode, "threat-strikes", _uint2str(agent.strikes));
