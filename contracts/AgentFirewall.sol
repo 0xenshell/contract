@@ -235,12 +235,42 @@ contract AgentFirewall is Ownable {
     }
 
     // ---------------------------------------------------------------
-    //  Ledger Approval
+    //  CRE Oracle Resolution
+    // ---------------------------------------------------------------
+
+    /// @notice CRE oracle resolves a queued action after off-chain analysis.
+    /// @param actionId The queued action ID
+    /// @param decision 1 = approve, 2 = escalate (to Ledger owner), 3 = block
+    function resolveAction(
+        uint256 actionId,
+        uint8 decision
+    ) external onlyOracle {
+        QueuedAction storage action = actionQueue[actionId];
+        require(action.queuedAt != 0, "Action not found");
+        require(action.decision == 0, "Already resolved");
+        require(decision >= 1 && decision <= 3, "Invalid decision");
+
+        action.decision = decision;
+
+        if (decision == 1) {
+            action.resolved = true;
+            emit ActionApproved(actionId, action.agentId);
+        } else if (decision == 2) {
+            emit ActionEscalated(actionId, action.agentId, agents[action.agentId].threatScore);
+        } else {
+            action.resolved = true;
+            emit ActionBlocked(actionId, action.agentId, "Blocked by CRE oracle");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    //  Ledger Approval (for escalated actions only)
     // ---------------------------------------------------------------
 
     function approveAction(uint256 actionId) external onlyOwner {
         QueuedAction storage action = actionQueue[actionId];
         require(action.queuedAt != 0, "Action not found");
+        require(action.decision == 2, "Action not escalated");
         require(!action.resolved, "Already resolved");
         action.resolved = true;
         emit ActionApproved(actionId, action.agentId);
@@ -249,6 +279,7 @@ contract AgentFirewall is Ownable {
     function rejectAction(uint256 actionId) external onlyOwner {
         QueuedAction storage action = actionQueue[actionId];
         require(action.queuedAt != 0, "Action not found");
+        require(action.decision == 2, "Action not escalated");
         require(!action.resolved, "Already resolved");
         action.resolved = true;
         emit ActionBlocked(actionId, action.agentId, "Rejected by owner via Ledger");
