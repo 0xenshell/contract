@@ -560,4 +560,75 @@ describe("AgentFirewall", function () {
       ).to.be.revertedWith("Agent not found");
     });
   });
+
+  describe("trust mesh", function () {
+    const ensNode2 = "0x2222222222222222222222222222222222222222222222222222222222222222";
+
+    beforeEach(async function () {
+      await firewall.registerAgentSimple(
+        "checker",
+        ensNode,
+        agent1.address,
+        ethers.parseEther("0.1"),
+      );
+      await firewall.registerAgentSimple(
+        "target",
+        ensNode2,
+        other.address,
+        ethers.parseEther("0.1"),
+      );
+    });
+
+    it("returns true for a clean agent", async function () {
+      expect(await firewall.isTrusted("target")).to.equal(true);
+    });
+
+    it("returns false for a deactivated agent", async function () {
+      await firewall.deactivateAgent("target");
+      expect(await firewall.isTrusted("target")).to.equal(false);
+    });
+
+    it("returns false for an agent above block threshold", async function () {
+      // Push threat score above blockThreshold (70000)
+      // Multiple high-score updates to get EMA above 70000
+      for (let i = 0; i < 10; i++) {
+        await firewall.connect(oracle).updateThreatScore("target", 100000);
+      }
+      const agent = await firewall.getAgent("target");
+      expect(agent.threatScore).to.be.gte(70000);
+      expect(await firewall.isTrusted("target")).to.equal(false);
+    });
+
+    it("returns false for an agent at max strikes", async function () {
+      for (let i = 0; i < 5; i++) {
+        await firewall.connect(oracle).updateThreatScore("target", 40000);
+      }
+      expect(await firewall.isTrusted("target")).to.equal(false);
+    });
+
+    it("checkTrust emits TrustChecked event", async function () {
+      await expect(firewall.checkTrust("checker", "target"))
+        .to.emit(firewall, "TrustChecked")
+        .withArgs("checker", "target", 0, 0, true);
+    });
+
+    it("checkTrust emits false for untrusted agent", async function () {
+      await firewall.deactivateAgent("target");
+      await expect(firewall.checkTrust("checker", "target"))
+        .to.emit(firewall, "TrustChecked")
+        .withArgs("checker", "target", 0, 0, false);
+    });
+
+    it("reverts for non-existent checker agent", async function () {
+      await expect(
+        firewall.checkTrust("ghost", "target"),
+      ).to.be.revertedWith("Agent not found");
+    });
+
+    it("reverts for non-existent target agent", async function () {
+      await expect(
+        firewall.checkTrust("checker", "ghost"),
+      ).to.be.revertedWith("Agent not found");
+    });
+  });
 });
