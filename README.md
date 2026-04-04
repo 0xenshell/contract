@@ -49,24 +49,21 @@ After registration, wrap the name in the ENS NameWrapper. This is required so th
 npx hardhat run scripts/wrap-ens.ts --network sepolia
 ```
 
-### 3. Deploy the contract
+### 3. Deploy and authorize
 
-Deploy parameters are stored in `ignition/parameters/sepolia.json`:
+The deploy script handles both contract deployment and ENS authorization in one step:
+
+```bash
+./scripts/deploy.sh
+```
+
+This will:
+- Deploy the AgentFirewall contract to Sepolia
+- Approve the contract on ENS Registry, NameWrapper, and Public Resolver
+
+Deploy parameters are in `ignition/parameters/sepolia.json`:
 - `ensResolver` - Sepolia ENS Public Resolver
-- `forwarder` - Chainlink KeystoneForwarder address (MockForwarder for simulation, KeystoneForwarder for production)
-
-```bash
-npx hardhat ignition deploy ignition/modules/AgentFirewall.ts --network sepolia \
-  --parameters ignition/parameters/sepolia.json
-```
-
-### 4. Authorize the contract on ENS
-
-The firewall writes threat scores to ENS text records. It needs operator approval on both the ENS Registry and NameWrapper to write under your ENS name.
-
-```bash
-FIREWALL_ADDRESS=0x... npx hardhat run scripts/approve-ens.ts --network sepolia
-```
+- `forwarder` - Chainlink MockForwarder (simulation) or KeystoneForwarder (production)
 
 ## License
 
