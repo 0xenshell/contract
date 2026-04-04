@@ -1,6 +1,8 @@
 {
   "AgentFirewall": {
     "ensResolver": "0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5",
+    "nameWrapper": "0x0635513f179D50A207757E05759CbD106d7dFcE8",
+    "ensParentNode": "0x98e0970ad42a5119a5981ce498957bbc95ac120a45e84121836218e6364289ae",
     "forwarder": "0x15fC6ae953E024d975e77382eEeC56A9101f9F88"
   }
 }
