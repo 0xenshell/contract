@@ -179,13 +179,13 @@ async function main() {
           } catch { /* skip */ }
         }
 
-        log(COLORS.gray, `  → Action #${actionId} submitted (tx: ${tx.hash.slice(0, 14)}...)`);
+        log(COLORS.gray, `  → Action #${actionId} submitted (tx: ${tx.hash})`);
 
-        // Encrypt instruction and post to relay for CRE to fetch
+        // Encrypt instruction and store on relay for CRE to fetch
         try {
           const encrypted = encryptForOracle(prompt.instruction, ORACLE_PUBLIC_KEY);
-          await fetch(`${RELAY_URL}/relay/${instructionHash.slice(2)}`, {
-            method: "POST",
+          await fetch(`${RELAY_URL}/relay/${instructionHash}`, {
+            method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ encryptedPayload: encrypted }),
           });
