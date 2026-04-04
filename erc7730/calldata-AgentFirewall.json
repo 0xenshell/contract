@@ -1,0 +1,127 @@
+{
+  "$schema": "https://github.com/LedgerHQ/clear-signing-erc7730-registry/raw/master/specs/erc7730-v1.schema.json",
+  "context": {
+    "$id": "ENShell AgentFirewall",
+    "contract": {
+      "deployments": [
+        {
+          "chainId": 11155111,
+          "address": "0xeb91387Ea4B7ADF8fA4901B22B2B72d7c54cbF13"
+        }
+      ],
+      "abi": [
+        "function approveAction(uint256 actionId) external",
+        "function rejectAction(uint256 actionId) external",
+        "function submitAction(string agentId, address target, uint256 value, bytes data, bytes32 instructionHash) external returns (uint256)",
+        "function registerAgentSimple(string agentId, bytes32 ensNode, address agentAddress, uint256 spendLimit) external",
+        "function deactivateAgent(string agentId) external",
+        "function reactivateAgent(string agentId) external"
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "ENShell",
+    "info": {
+      "legalName": "ENShell",
+      "url": "https://enshell.xyz"
+    }
+  },
+  "display": {
+    "formats": {
+      "approveAction(uint256)": {
+        "intent": "Approve Escalated Action",
+        "fields": [
+          {
+            "label": "Action ID",
+            "format": "raw",
+            "path": "#.actionId"
+          }
+        ],
+        "required": ["#.actionId"],
+        "excluded": []
+      },
+      "rejectAction(uint256)": {
+        "intent": "Reject Escalated Action",
+        "fields": [
+          {
+            "label": "Action ID",
+            "format": "raw",
+            "path": "#.actionId"
+          }
+        ],
+        "required": ["#.actionId"],
+        "excluded": []
+      },
+      "submitAction(string,address,uint256,bytes,bytes32)": {
+        "intent": "Submit Action for Analysis",
+        "fields": [
+          {
+            "label": "Agent",
+            "format": "raw",
+            "path": "#.agentId"
+          },
+          {
+            "label": "Target",
+            "format": "addressName",
+            "params": { "types": ["contract"], "sources": ["local"] },
+            "path": "#.target"
+          },
+          {
+            "label": "Value",
+            "format": "amount",
+            "path": "#.value"
+          }
+        ],
+        "required": ["#.agentId", "#.target", "#.value"],
+        "excluded": ["#.data", "#.instructionHash"]
+      },
+      "registerAgentSimple(string,bytes32,address,uint256)": {
+        "intent": "Register AI Agent",
+        "fields": [
+          {
+            "label": "Agent ID",
+            "format": "raw",
+            "path": "#.agentId"
+          },
+          {
+            "label": "Agent Wallet",
+            "format": "addressName",
+            "params": { "types": ["eoa", "wallet"], "sources": ["local"] },
+            "path": "#.agentAddress"
+          },
+          {
+            "label": "Spend Limit",
+            "format": "amount",
+            "path": "#.spendLimit"
+          }
+        ],
+        "required": ["#.agentId", "#.agentAddress", "#.spendLimit"],
+        "excluded": ["#.ensNode"]
+      },
+      "deactivateAgent(string)": {
+        "intent": "Freeze Agent",
+        "fields": [
+          {
+            "label": "Agent ID",
+            "format": "raw",
+            "path": "#.agentId"
+          }
+        ],
+        "required": ["#.agentId"],
+        "excluded": []
+      },
+      "reactivateAgent(string)": {
+        "intent": "Reactivate Agent",
+        "fields": [
+          {
+            "label": "Agent ID",
+            "format": "raw",
+            "path": "#.agentId"
+          }
+        ],
+        "required": ["#.agentId"],
+        "excluded": []
+      }
+    }
+  }
+}
