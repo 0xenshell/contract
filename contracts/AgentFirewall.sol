@@ -164,7 +164,7 @@ contract AgentFirewall is Ownable {
         string calldata agentId,
         address agentAddress,
         uint256 spendLimit
-    ) external onlyOwner {
+    ) external {
         require(agents[agentId].registeredAt == 0, "Agent already registered");
 
         // Compute ENS node: keccak256(abi.encodePacked(parentNode, keccak256(agentId)))

@@ -92,16 +92,17 @@ describe("AgentFirewall", function () {
       ).to.be.revertedWith("Agent already registered");
     });
 
-    it("reverts when called by non-owner", async function () {
-      await expect(
-        firewall
-          .connect(other)
-          .registerAgentSimple(
-            "trader",
-            agent1.address,
-            ethers.parseEther("0.1"),
-          ),
-      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+    it("allows anyone to register an agent", async function () {
+      const tx = await firewall
+        .connect(other)
+        .registerAgentSimple(
+          "public-agent",
+          agent1.address,
+          ethers.parseEther("0.1"),
+        );
+      await tx.wait();
+      const agent = await firewall.getAgent("public-agent");
+      expect(agent.agentAddress).to.equal(agent1.address);
     });
   });
 
