@@ -18,9 +18,9 @@ import * as path from "path";
 import { encryptForOracle, NETWORK_CONFIG, Network } from "@enshell/sdk";
 import {
   SAFE_PROMPTS, SUSPICIOUS_PROMPTS, MALICIOUS_PROMPTS,
-  SAFE_TARGETS, SUSPICIOUS_TARGETS, MALICIOUS_TARGETS,
   pickRandom,
 } from "./prompts.js";
+import type { DemoPrompt } from "./prompts.js";
 
 const CRE_SIMULATE = path.resolve(process.env.HOME || "~", "www/enshell-cre-workflow/simulate.sh");
 const RELAY_URL = NETWORK_CONFIG[Network.SEPOLIA].relayUrl;
@@ -135,35 +135,31 @@ async function main() {
       } else {
         // 85% — Protect action
         const agent = pickRandom(agents);
-        let prompt: { instruction: string; value: string };
-        let target: string;
+        let chosen: DemoPrompt;
         let category: string;
 
         const promptRoll = Math.random();
         if (promptRoll < 0.70) {
-          prompt = pickRandom(SAFE_PROMPTS);
-          target = pickRandom(SAFE_TARGETS);
+          chosen = pickRandom(SAFE_PROMPTS);
           category = "safe";
         } else if (promptRoll < 0.90) {
-          prompt = pickRandom(SUSPICIOUS_PROMPTS);
-          target = pickRandom(SUSPICIOUS_TARGETS);
+          chosen = pickRandom(SUSPICIOUS_PROMPTS);
           category = "suspicious";
         } else {
-          prompt = pickRandom(MALICIOUS_PROMPTS);
-          target = pickRandom(MALICIOUS_TARGETS);
+          chosen = pickRandom(MALICIOUS_PROMPTS);
           category = "malicious";
         }
 
-        log(COLORS.gray, `${agent.id} → protect [${category}] "${prompt.instruction.slice(0, 50)}..."`);
+        log(COLORS.gray, `${agent.id} → protect [${category}] "${chosen.instruction.slice(0, 50)}..."`);
 
         // Submit action on-chain
         const userFirewall = firewall.connect(agent.signer);
-        const instructionHash = keccak256(toUtf8Bytes(prompt.instruction));
+        const instructionHash = keccak256(toUtf8Bytes(chosen.instruction));
 
         const tx = await userFirewall.submitAction(
           agent.id,
-          target,
-          ethers.parseEther(prompt.value),
+          chosen.target,
+          ethers.parseEther(chosen.value),
           "0x",
           instructionHash,
         );
@@ -183,7 +179,7 @@ async function main() {
 
         // Encrypt instruction and store on relay for CRE to fetch
         try {
-          const encrypted = encryptForOracle(prompt.instruction, ORACLE_PUBLIC_KEY);
+          const encrypted = encryptForOracle(chosen.instruction, ORACLE_PUBLIC_KEY);
           await fetch(`${RELAY_URL}/relay/${instructionHash}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
