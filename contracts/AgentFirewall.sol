@@ -11,6 +11,10 @@ interface IENSResolver {
     function text(bytes32 node, string calldata key) external view returns (string memory);
 }
 
+interface INameWrapper {
+    function setSubnodeRecord(bytes32 parentNode, string calldata label, address owner, address resolver, uint64 ttl, uint32 fuses, uint64 expiry) external returns (bytes32);
+}
+
 contract AgentFirewall is Ownable {
 
     // ---------------------------------------------------------------
@@ -52,6 +56,8 @@ contract AgentFirewall is Ownable {
     uint256 public nextQueueId;
 
     IENSResolver public ensResolver;
+    INameWrapper public nameWrapper;
+    bytes32 public ensParentNode;
     address public forwarder;
 
     uint256 public blockThreshold = 70_000;
@@ -137,8 +143,15 @@ contract AgentFirewall is Ownable {
     //  Constructor
     // ---------------------------------------------------------------
 
-    constructor(address _ensResolver, address _forwarder) Ownable(msg.sender) {
+    constructor(
+        address _ensResolver,
+        address _nameWrapper,
+        bytes32 _ensParentNode,
+        address _forwarder
+    ) Ownable(msg.sender) {
         ensResolver = IENSResolver(_ensResolver);
+        nameWrapper = INameWrapper(_nameWrapper);
+        ensParentNode = _ensParentNode;
         forwarder = _forwarder;
     }
 
@@ -146,14 +159,28 @@ contract AgentFirewall is Ownable {
     //  Agent Registration
     // ---------------------------------------------------------------
 
-    /// @notice Register agent without World ID (fully functional, not just for testing)
+    /// @notice Register an agent. Creates an ENS subdomain and stores the agent on-chain.
     function registerAgentSimple(
         string calldata agentId,
-        bytes32 ensNode,
         address agentAddress,
         uint256 spendLimit
     ) external onlyOwner {
         require(agents[agentId].registeredAt == 0, "Agent already registered");
+
+        // Compute ENS node: keccak256(abi.encodePacked(parentNode, keccak256(agentId)))
+        bytes32 labelHash = keccak256(bytes(agentId));
+        bytes32 ensNode = keccak256(abi.encodePacked(ensParentNode, labelHash));
+
+        // Create ENS subdomain via NameWrapper
+        nameWrapper.setSubnodeRecord(
+            ensParentNode,
+            agentId,
+            address(this),      // contract owns the subdomain
+            address(ensResolver),
+            0,                   // ttl
+            0,                   // fuses
+            type(uint64).max     // max expiry
+        );
 
         agents[agentId] = Agent({
             ensNode: ensNode,
@@ -354,6 +381,14 @@ contract AgentFirewall is Ownable {
 
     function setENSResolver(address _ensResolver) external onlyOwner {
         ensResolver = IENSResolver(_ensResolver);
+    }
+
+    function setNameWrapper(address _nameWrapper) external onlyOwner {
+        nameWrapper = INameWrapper(_nameWrapper);
+    }
+
+    function setEnsParentNode(bytes32 _ensParentNode) external onlyOwner {
+        ensParentNode = _ensParentNode;
     }
 
     // ---------------------------------------------------------------
