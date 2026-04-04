@@ -8,11 +8,11 @@ contract MockNameWrapper {
     function setSubnodeRecord(
         bytes32 parentNode,
         string calldata label,
-        address owner,
-        address resolver,
-        uint64 ttl,
-        uint32 fuses,
-        uint64 expiry
+        address,
+        address,
+        uint64,
+        uint32,
+        uint64
     ) external returns (bytes32) {
         bytes32 labelHash = keccak256(bytes(label));
         bytes32 node = keccak256(abi.encodePacked(parentNode, labelHash));
