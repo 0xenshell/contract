@@ -3,6 +3,8 @@ import { Wallet, JsonRpcProvider } from "ethers";
 import * as fs from "fs";
 import * as path from "path";
 
+const RELAY_URL = "https://relay.enshell.xyz";
+
 const AGENT_SUFFIXES: Record<string, string[]> = {
   alice: ["trader", "scanner", "keeper", "vault"],
   bob: ["bridge", "oracle", "sentinel", "relay"],
@@ -73,6 +75,21 @@ async function main() {
         );
         await tx.wait();
         registered++;
+
+        // Post to relay so the site dashboard shows the agent
+        try {
+          await fetch(`${RELAY_URL}/agents/${agentId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ensName: `${agentId}.enshell.eth`,
+              address: signer.address,
+              spendLimit: "1.0",
+              active: true,
+            }),
+          });
+        } catch { /* relay optional */ }
+
         console.log(`  ${agentId.padEnd(25)} ${signer.address.slice(0, 10)}...  ${tx.hash.slice(0, 18)}...`);
       } catch (err: any) {
         if (err.message?.includes("already registered")) {
