@@ -10,12 +10,59 @@
         }
       ],
       "abi": [
-        "function approveAction(uint256 actionId) external",
-        "function rejectAction(uint256 actionId) external",
-        "function submitAction(string agentId, address target, uint256 value, bytes data, bytes32 instructionHash) external returns (uint256)",
-        "function registerAgentSimple(string agentId, bytes32 ensNode, address agentAddress, uint256 spendLimit) external",
-        "function deactivateAgent(string agentId) external",
-        "function reactivateAgent(string agentId) external"
+        {
+          "type": "function",
+          "name": "approveAction",
+          "inputs": [{ "name": "actionId", "type": "uint256" }],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "rejectAction",
+          "inputs": [{ "name": "actionId", "type": "uint256" }],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "submitAction",
+          "inputs": [
+            { "name": "agentId", "type": "string" },
+            { "name": "target", "type": "address" },
+            { "name": "value", "type": "uint256" },
+            { "name": "data", "type": "bytes" },
+            { "name": "instructionHash", "type": "bytes32" }
+          ],
+          "outputs": [{ "name": "actionId", "type": "uint256" }],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "registerAgentSimple",
+          "inputs": [
+            { "name": "agentId", "type": "string" },
+            { "name": "ensNode", "type": "bytes32" },
+            { "name": "agentAddress", "type": "address" },
+            { "name": "spendLimit", "type": "uint256" }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "deactivateAgent",
+          "inputs": [{ "name": "agentId", "type": "string" }],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "reactivateAgent",
+          "inputs": [{ "name": "agentId", "type": "string" }],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        }
       ]
     }
   },
