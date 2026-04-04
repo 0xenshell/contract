@@ -10,9 +10,18 @@ export async function setupAgentFirewall() {
   const ensResolver = await MockENSResolver.deploy();
   await ensResolver.waitForDeployment();
 
+  const MockNameWrapper = await ethers.getContractFactory("MockNameWrapper");
+  const nameWrapper = await MockNameWrapper.deploy();
+  await nameWrapper.waitForDeployment();
+
+  // Use a deterministic parent node for tests
+  const ensParentNode = ethers.namehash("enshell.eth");
+
   const AgentFirewall = await ethers.getContractFactory("AgentFirewall");
   const firewall = await AgentFirewall.deploy(
     await ensResolver.getAddress(),
+    await nameWrapper.getAddress(),
+    ensParentNode,
     forwarder.address,
   );
   await firewall.waitForDeployment();
@@ -26,5 +35,7 @@ export async function setupAgentFirewall() {
     other,
     firewall,
     ensResolver,
+    nameWrapper,
+    ensParentNode,
   };
 }
