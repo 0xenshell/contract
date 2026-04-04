@@ -194,9 +194,9 @@ async function main() {
         // Trigger CRE simulation
         try {
           log(COLORS.gray, `  → Running CRE simulation...`);
-          const output = execSync(`${CRE_SIMULATE} ${tx.hash}`, {
+          const output = execSync(`${CRE_SIMULATE} ${tx.hash} 2>&1`, {
             timeout: 120000,
-            stdio: ["pipe", "pipe", "pipe"],
+            cwd: path.resolve(process.env.HOME || "~", "www/enshell-cre-workflow"),
           }).toString();
 
           // Parse result
@@ -217,9 +217,12 @@ async function main() {
             }
           } else if (output.includes("decision=3")) {
             log(COLORS.red, `  → BLOCKED (Action #${actionId})`);
+          } else {
+            log(COLORS.yellow, `  → Unknown CRE result: ${output.slice(-200)}`);
           }
         } catch (err: any) {
-          log(COLORS.red, `  → CRE simulation failed: ${err.message?.slice(0, 60)}`);
+          const errMsg = err.stderr?.toString() || err.stdout?.toString() || err.message;
+          log(COLORS.red, `  → CRE simulation failed: ${errMsg?.slice(0, 300)}`);
         }
 
         actionCount++;
