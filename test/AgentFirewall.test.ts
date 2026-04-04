@@ -10,7 +10,7 @@ describe("AgentFirewall", function () {
   let firewall: any;
   let ensResolver: any;
 
-  const ensNode = "0x1111111111111111111111111111111111111111111111111111111111111111";
+  // ensNode is computed by the contract from agentId + ensParentNode
 
   beforeEach(async function () {
     const env = await setupAgentFirewall();
@@ -27,13 +27,12 @@ describe("AgentFirewall", function () {
     it("registers an agent successfully", async function () {
       await firewall.registerAgentSimple(
         "trader",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
 
       const agent = await firewall.getAgent("trader");
-      expect(agent.ensNode).to.equal(ensNode);
+      expect(agent.ensNode).to.not.equal(ethers.ZeroHash);
       expect(agent.agentAddress).to.equal(agent1.address);
       expect(agent.spendLimit).to.equal(ethers.parseEther("0.1"));
       expect(agent.threatScore).to.equal(0);
@@ -48,7 +47,6 @@ describe("AgentFirewall", function () {
 
       await firewall.registerAgentSimple(
         "trader",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
@@ -60,37 +58,27 @@ describe("AgentFirewall", function () {
       await expect(
         firewall.registerAgentSimple(
           "trader",
-          ensNode,
           agent1.address,
           ethers.parseEther("0.1"),
         ),
-      )
-        .to.emit(firewall, "AgentRegistered")
-        .withArgs(
-          "trader",
-          ensNode,
-          agent1.address,
-          ethers.parseEther("0.1"),
-          false,
-        );
+      ).to.emit(firewall, "AgentRegistered");
     });
 
     it("writes initial ENS records", async function () {
       await firewall.registerAgentSimple(
         "trader",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
 
-      expect(await ensResolver.text(ensNode, "threat-score")).to.equal("0");
-      expect(await ensResolver.text(ensNode, "threat-strikes")).to.equal("0");
+      const agent = await firewall.getAgent("trader");
+      expect(await ensResolver.text(agent.ensNode, "threat-score")).to.equal("0");
+      expect(await ensResolver.text(agent.ensNode, "threat-strikes")).to.equal("0");
     });
 
     it("reverts on duplicate agent", async function () {
       await firewall.registerAgentSimple(
         "trader",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
@@ -98,7 +86,6 @@ describe("AgentFirewall", function () {
       await expect(
         firewall.registerAgentSimple(
           "trader",
-          ensNode,
           agent1.address,
           ethers.parseEther("0.1"),
         ),
@@ -111,7 +98,6 @@ describe("AgentFirewall", function () {
           .connect(other)
           .registerAgentSimple(
             "trader",
-            ensNode,
             agent1.address,
             ethers.parseEther("0.1"),
           ),
@@ -131,7 +117,6 @@ describe("AgentFirewall", function () {
     beforeEach(async function () {
       await firewall.registerAgentSimple(
         "trader",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
@@ -166,7 +151,6 @@ describe("AgentFirewall", function () {
     beforeEach(async function () {
       await firewall.registerAgentSimple(
         "trader",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
@@ -193,7 +177,6 @@ describe("AgentFirewall", function () {
     beforeEach(async function () {
       await firewall.registerAgentSimple(
         "trader",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
@@ -244,7 +227,6 @@ describe("AgentFirewall", function () {
     beforeEach(async function () {
       await firewall.registerAgentSimple(
         "trader",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
@@ -323,7 +305,6 @@ describe("AgentFirewall", function () {
     beforeEach(async function () {
       await firewall.registerAgentSimple(
         "trader",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
@@ -397,7 +378,6 @@ describe("AgentFirewall", function () {
     beforeEach(async function () {
       await firewall.registerAgentSimple(
         "trader",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
@@ -455,7 +435,6 @@ describe("AgentFirewall", function () {
     beforeEach(async function () {
       await firewall.registerAgentSimple(
         "trader",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
@@ -513,7 +492,6 @@ describe("AgentFirewall", function () {
     beforeEach(async function () {
       await firewall.registerAgentSimple(
         "trader",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
@@ -568,8 +546,9 @@ describe("AgentFirewall", function () {
     it("updates ENS records", async function () {
       const report = encodeReport("trader", 0, 1, 50000);
       await firewall.connect(forwarder).onReport(metadata, report);
-      expect(await ensResolver.text(ensNode, "threat-score")).to.equal("15000");
-      expect(await ensResolver.text(ensNode, "threat-strikes")).to.equal("1");
+      const agent = await firewall.getAgent("trader");
+      expect(await ensResolver.text(agent.ensNode, "threat-score")).to.equal("15000");
+      expect(await ensResolver.text(agent.ensNode, "threat-strikes")).to.equal("1");
     });
 
     it("emits ThreatScoreUpdated event", async function () {
@@ -583,18 +562,14 @@ describe("AgentFirewall", function () {
   });
 
   describe("trust mesh", function () {
-    const ensNode2 = "0x2222222222222222222222222222222222222222222222222222222222222222";
-
     beforeEach(async function () {
       await firewall.registerAgentSimple(
         "checker",
-        ensNode,
         agent1.address,
         ethers.parseEther("0.1"),
       );
       await firewall.registerAgentSimple(
         "target",
-        ensNode2,
         other.address,
         ethers.parseEther("0.1"),
       );
