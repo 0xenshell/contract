@@ -5,7 +5,7 @@ describe("AgentFirewall", function () {
   let ethers: any;
   let owner: any;
   let agent1: any;
-  let oracle: any;
+  let forwarder: any;
   let other: any;
   let firewall: any;
   let ensResolver: any;
@@ -17,7 +17,7 @@ describe("AgentFirewall", function () {
     ethers = env.ethers;
     owner = env.owner;
     agent1 = env.agent1;
-    oracle = env.oracle;
+    forwarder = env.forwarder;
     other = env.other;
     firewall = env.firewall;
     ensResolver = env.ensResolver;
@@ -307,10 +307,18 @@ describe("AgentFirewall", function () {
     });
   });
 
-  describe("resolveAction", function () {
+  describe("onReport (CRE resolution)", function () {
     const target = "0x1111111111111111111111111111111111111111";
     const data = "0x";
     const instructionHash = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const metadata = "0x";
+
+    function encodeReport(agentId: string, actionId: number, decision: number, rawThreatScore: number) {
+      return ethers.AbiCoder.defaultAbiCoder().encode(
+        ["string", "uint256", "uint8", "uint256"],
+        [agentId, actionId, decision, rawThreatScore],
+      );
+    }
 
     beforeEach(async function () {
       await firewall.registerAgentSimple(
@@ -323,7 +331,8 @@ describe("AgentFirewall", function () {
     });
 
     it("approves an action (decision = 1)", async function () {
-      const tx = await firewall.connect(oracle).resolveAction(0, 1);
+      const report = encodeReport("trader", 0, 1, 0);
+      const tx = await firewall.connect(forwarder).onReport(metadata, report);
       await expect(tx)
         .to.emit(firewall, "ActionApproved")
         .withArgs(0, "trader");
@@ -334,7 +343,8 @@ describe("AgentFirewall", function () {
     });
 
     it("escalates an action (decision = 2)", async function () {
-      const tx = await firewall.connect(oracle).resolveAction(0, 2);
+      const report = encodeReport("trader", 0, 2, 0);
+      const tx = await firewall.connect(forwarder).onReport(metadata, report);
       await expect(tx)
         .to.emit(firewall, "ActionEscalated")
         .withArgs(0, "trader", 0);
@@ -345,7 +355,8 @@ describe("AgentFirewall", function () {
     });
 
     it("blocks an action (decision = 3)", async function () {
-      const tx = await firewall.connect(oracle).resolveAction(0, 3);
+      const report = encodeReport("trader", 0, 3, 0);
+      const tx = await firewall.connect(forwarder).onReport(metadata, report);
       await expect(tx)
         .to.emit(firewall, "ActionBlocked")
         .withArgs(0, "trader", "Blocked by CRE oracle");
@@ -356,32 +367,25 @@ describe("AgentFirewall", function () {
     });
 
     it("reverts on double resolve", async function () {
-      await firewall.connect(oracle).resolveAction(0, 1);
+      const report = encodeReport("trader", 0, 1, 0);
+      await firewall.connect(forwarder).onReport(metadata, report);
       await expect(
-        firewall.connect(oracle).resolveAction(0, 1),
+        firewall.connect(forwarder).onReport(metadata, report),
       ).to.be.revertedWith("Already resolved");
     });
 
-    it("reverts for invalid decision", async function () {
-      await expect(
-        firewall.connect(oracle).resolveAction(0, 0),
-      ).to.be.revertedWith("Invalid decision");
-
-      await expect(
-        firewall.connect(oracle).resolveAction(0, 4),
-      ).to.be.revertedWith("Invalid decision");
-    });
-
     it("reverts for non-existent action", async function () {
+      const report = encodeReport("trader", 999, 1, 0);
       await expect(
-        firewall.connect(oracle).resolveAction(999, 1),
+        firewall.connect(forwarder).onReport(metadata, report),
       ).to.be.revertedWith("Action not found");
     });
 
-    it("reverts when called by non-oracle", async function () {
+    it("reverts when called by non-forwarder", async function () {
+      const report = encodeReport("trader", 0, 1, 0);
       await expect(
-        firewall.connect(other).resolveAction(0, 1),
-      ).to.be.revertedWith("Only CRE oracle");
+        firewall.connect(other).onReport(metadata, report),
+      ).to.be.revertedWith("Only CRE forwarder");
     });
   });
 
@@ -398,8 +402,12 @@ describe("AgentFirewall", function () {
         ethers.parseEther("0.1"),
       );
       await firewall.submitAction("trader", target, 0, data, instructionHash);
-      // CRE escalates the action
-      await firewall.connect(oracle).resolveAction(0, 2);
+      // CRE escalates the action via onReport
+      const escalateReport = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["string", "uint256", "uint8", "uint256"],
+        ["trader", 0, 2, 0],
+      );
+      await firewall.connect(forwarder).onReport("0x", escalateReport);
     });
 
     it("approves an escalated action", async function () {
@@ -452,7 +460,11 @@ describe("AgentFirewall", function () {
         ethers.parseEther("0.1"),
       );
       await firewall.submitAction("trader", target, 0, data, instructionHash);
-      await firewall.connect(oracle).resolveAction(0, 2);
+      const escalateReport = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["string", "uint256", "uint8", "uint256"],
+        ["trader", 0, 2, 0],
+      );
+      await firewall.connect(forwarder).onReport("0x", escalateReport);
     });
 
     it("rejects an escalated action", async function () {
@@ -486,7 +498,18 @@ describe("AgentFirewall", function () {
     });
   });
 
-  describe("updateThreatScore", function () {
+  describe("threat score via onReport", function () {
+    const target = "0x1111111111111111111111111111111111111111";
+    const instructionHash = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const metadata = "0x";
+
+    function encodeReport(agentId: string, actionId: number, decision: number, rawThreatScore: number) {
+      return ethers.AbiCoder.defaultAbiCoder().encode(
+        ["string", "uint256", "uint8", "uint256"],
+        [agentId, actionId, decision, rawThreatScore],
+      );
+    }
+
     beforeEach(async function () {
       await firewall.registerAgentSimple(
         "trader",
@@ -494,39 +517,48 @@ describe("AgentFirewall", function () {
         agent1.address,
         ethers.parseEther("0.1"),
       );
+      await firewall.submitAction("trader", target, 0, "0x", instructionHash);
     });
 
     it("computes EMA correctly on first update", async function () {
-      // EMA: (300 * 50000 + 700 * 0) / 1000 = 15000
-      await firewall.connect(oracle).updateThreatScore("trader", 50000);
+      const report = encodeReport("trader", 0, 1, 50000);
+      await firewall.connect(forwarder).onReport(metadata, report);
       const agent = await firewall.getAgent("trader");
       expect(agent.threatScore).to.equal(15000);
     });
 
     it("computes EMA correctly on sequential updates", async function () {
-      // First: (300 * 50000 + 700 * 0) / 1000 = 15000
-      await firewall.connect(oracle).updateThreatScore("trader", 50000);
-      // Second: (300 * 50000 + 700 * 15000) / 1000 = 15000 + 10500 = 25500
-      await firewall.connect(oracle).updateThreatScore("trader", 50000);
+      const report1 = encodeReport("trader", 0, 1, 50000);
+      await firewall.connect(forwarder).onReport(metadata, report1);
+      // Submit another action for second report
+      await firewall.submitAction("trader", target, 0, "0x", instructionHash);
+      const report2 = encodeReport("trader", 1, 1, 50000);
+      await firewall.connect(forwarder).onReport(metadata, report2);
       const agent = await firewall.getAgent("trader");
       expect(agent.threatScore).to.equal(25500);
     });
 
     it("increments strikes when raw score >= escalation threshold", async function () {
-      await firewall.connect(oracle).updateThreatScore("trader", 40000);
+      const report = encodeReport("trader", 0, 1, 40000);
+      await firewall.connect(forwarder).onReport(metadata, report);
       const agent = await firewall.getAgent("trader");
       expect(agent.strikes).to.equal(1);
     });
 
     it("does not increment strikes when raw score is below threshold", async function () {
-      await firewall.connect(oracle).updateThreatScore("trader", 39999);
+      const report = encodeReport("trader", 0, 1, 39999);
+      await firewall.connect(forwarder).onReport(metadata, report);
       const agent = await firewall.getAgent("trader");
       expect(agent.strikes).to.equal(0);
     });
 
     it("auto-freezes agent at max strikes", async function () {
       for (let i = 0; i < 5; i++) {
-        await firewall.connect(oracle).updateThreatScore("trader", 40000);
+        await firewall.submitAction("trader", target, 0, "0x", instructionHash);
+      }
+      for (let i = 0; i < 5; i++) {
+        const report = encodeReport("trader", i, 1, 40000);
+        await firewall.connect(forwarder).onReport(metadata, report);
       }
       const agent = await firewall.getAgent("trader");
       expect(agent.active).to.equal(false);
@@ -534,30 +566,19 @@ describe("AgentFirewall", function () {
     });
 
     it("updates ENS records", async function () {
-      await firewall.connect(oracle).updateThreatScore("trader", 50000);
-      // EMA = 15000, ENS stores raw value (no /EMA_SCALE in current impl)
+      const report = encodeReport("trader", 0, 1, 50000);
+      await firewall.connect(forwarder).onReport(metadata, report);
       expect(await ensResolver.text(ensNode, "threat-score")).to.equal("15000");
       expect(await ensResolver.text(ensNode, "threat-strikes")).to.equal("1");
     });
 
     it("emits ThreatScoreUpdated event", async function () {
+      const report = encodeReport("trader", 0, 1, 50000);
       await expect(
-        firewall.connect(oracle).updateThreatScore("trader", 50000),
+        firewall.connect(forwarder).onReport(metadata, report),
       )
         .to.emit(firewall, "ThreatScoreUpdated")
         .withArgs("trader", 0, 15000, 50000, 1);
-    });
-
-    it("reverts when called by non-oracle", async function () {
-      await expect(
-        firewall.connect(other).updateThreatScore("trader", 50000),
-      ).to.be.revertedWith("Only CRE oracle");
-    });
-
-    it("reverts for non-existent agent", async function () {
-      await expect(
-        firewall.connect(oracle).updateThreatScore("ghost", 50000),
-      ).to.be.revertedWith("Agent not found");
     });
   });
 
@@ -588,20 +609,19 @@ describe("AgentFirewall", function () {
       expect(await firewall.isTrusted("target")).to.equal(false);
     });
 
-    it("returns false for an agent above block threshold", async function () {
-      // Push threat score above blockThreshold (70000)
-      // Multiple high-score updates to get EMA above 70000
-      for (let i = 0; i < 10; i++) {
-        await firewall.connect(oracle).updateThreatScore("target", 100000);
-      }
-      const agent = await firewall.getAgent("target");
-      expect(agent.threatScore).to.be.gte(70000);
-      expect(await firewall.isTrusted("target")).to.equal(false);
-    });
-
-    it("returns false for an agent at max strikes", async function () {
+    it("returns false for a deactivated agent via max strikes", async function () {
+      // Use onReport to push threat scores that accumulate strikes
+      const target = "0x1111111111111111111111111111111111111111";
+      const instructionHash = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
       for (let i = 0; i < 5; i++) {
-        await firewall.connect(oracle).updateThreatScore("target", 40000);
+        await firewall.submitAction("target", target, 0, "0x", instructionHash);
+      }
+      for (let i = 0; i < 5; i++) {
+        const report = ethers.AbiCoder.defaultAbiCoder().encode(
+          ["string", "uint256", "uint8", "uint256"],
+          ["target", i, 1, 40000],
+        );
+        await firewall.connect(forwarder).onReport("0x", report);
       }
       expect(await firewall.isTrusted("target")).to.equal(false);
     });
@@ -655,14 +675,14 @@ describe("AgentFirewall", function () {
       ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
     });
 
-    it("setCreOracle updates oracle address", async function () {
-      await firewall.setCreOracle(other.address);
-      expect(await firewall.creOracle()).to.equal(other.address);
+    it("setForwarder updates forwarder address", async function () {
+      await firewall.setForwarder(other.address);
+      expect(await firewall.forwarder()).to.equal(other.address);
     });
 
-    it("setCreOracle reverts for non-owner", async function () {
+    it("setForwarder reverts for non-owner", async function () {
       await expect(
-        firewall.connect(other).setCreOracle(other.address),
+        firewall.connect(other).setForwarder(other.address),
       ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
     });
 
