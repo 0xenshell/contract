@@ -631,4 +631,61 @@ describe("AgentFirewall", function () {
       ).to.be.revertedWith("Agent not found");
     });
   });
+
+  describe("admin setters", function () {
+    it("setBlockThreshold updates threshold", async function () {
+      await firewall.setBlockThreshold(80000);
+      expect(await firewall.blockThreshold()).to.equal(80000);
+    });
+
+    it("setBlockThreshold reverts for non-owner", async function () {
+      await expect(
+        firewall.connect(other).setBlockThreshold(80000),
+      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+    });
+
+    it("setEscalateThreshold updates threshold", async function () {
+      await firewall.setEscalateThreshold(50000);
+      expect(await firewall.escalateThreshold()).to.equal(50000);
+    });
+
+    it("setEscalateThreshold reverts for non-owner", async function () {
+      await expect(
+        firewall.connect(other).setEscalateThreshold(50000),
+      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+    });
+
+    it("setCreOracle updates oracle address", async function () {
+      await firewall.setCreOracle(other.address);
+      expect(await firewall.creOracle()).to.equal(other.address);
+    });
+
+    it("setCreOracle reverts for non-owner", async function () {
+      await expect(
+        firewall.connect(other).setCreOracle(other.address),
+      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+    });
+
+    it("setENSResolver updates resolver", async function () {
+      await firewall.setENSResolver(other.address);
+      expect(await firewall.ensResolver()).to.equal(other.address);
+    });
+
+    it("setENSResolver reverts for non-owner", async function () {
+      await expect(
+        firewall.connect(other).setENSResolver(other.address),
+      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+    });
+
+    it("setMaxStrikes updates max strikes", async function () {
+      await firewall.setMaxStrikes(10);
+      expect(await firewall.maxStrikes()).to.equal(10);
+    });
+
+    it("setMaxStrikes reverts for non-owner", async function () {
+      await expect(
+        firewall.connect(other).setMaxStrikes(10),
+      ).to.be.revertedWithCustomError(firewall, "OwnableUnauthorizedAccount");
+    });
+  });
 });
