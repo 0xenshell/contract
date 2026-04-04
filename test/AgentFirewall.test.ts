@@ -239,6 +239,7 @@ describe("AgentFirewall", function () {
   describe("submitAction", function () {
     const target = "0x1111111111111111111111111111111111111111";
     const data = "0x";
+    const instructionHash = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     beforeEach(async function () {
       await firewall.registerAgentSimple(
@@ -247,116 +248,69 @@ describe("AgentFirewall", function () {
         agent1.address,
         ethers.parseEther("0.1"),
       );
-      await firewall.setAllowedTarget("trader", target, true);
     });
 
-    it("auto-approves a clean action", async function () {
+    it("queues an action and emits ActionSubmitted", async function () {
       const tx = await firewall.submitAction(
         "trader",
         target,
         ethers.parseEther("0.05"),
         data,
-        "Send 0.05 ETH",
+        instructionHash,
       );
 
       await expect(tx)
-        .to.emit(firewall, "ActionApproved")
-        .withArgs(0, "trader");
-    });
-
-    it("escalates when target is not allowed", async function () {
-      const unknownTarget = "0x9999999999999999999999999999999999999999";
-      const tx = await firewall.submitAction(
-        "trader",
-        unknownTarget,
-        ethers.parseEther("0.01"),
-        data,
-        "Send to unknown",
-      );
-
-      await expect(tx)
-        .to.emit(firewall, "ActionEscalated")
-        .withArgs(0, "trader", 0);
+        .to.emit(firewall, "ActionSubmitted")
+        .withArgs(0, "trader", target, ethers.parseEther("0.05"), instructionHash);
 
       const queued = await firewall.getQueuedAction(0);
-      expect(queued.target).to.equal(unknownTarget);
+      expect(queued.agentId).to.equal("trader");
+      expect(queued.target).to.equal(target);
+      expect(queued.instructionHash).to.equal(instructionHash);
       expect(queued.resolved).to.equal(false);
-    });
-
-    it("escalates when value exceeds spend limit", async function () {
-      const tx = await firewall.submitAction(
-        "trader",
-        target,
-        ethers.parseEther("1.0"),
-        data,
-        "Big spend",
-      );
-
-      await expect(tx)
-        .to.emit(firewall, "ActionEscalated")
-        .withArgs(0, "trader", 0);
-    });
-
-    it("blocks when agent has max strikes", async function () {
-      // Directly set strikes to maxStrikes (5) by manipulating via a future
-      // threat score update feature. For now, we test by lowering maxStrikes.
-      await firewall.setMaxStrikes(0);
-
-      const tx = await firewall.submitAction(
-        "trader",
-        target,
-        ethers.parseEther("0.01"),
-        data,
-        "Should be blocked",
-      );
-
-      await expect(tx)
-        .to.emit(firewall, "ActionBlocked")
-        .withArgs(0, "trader", "Max strikes exceeded");
+      expect(queued.decision).to.equal(0);
     });
 
     it("reverts when agent is frozen", async function () {
       await firewall.deactivateAgent("trader");
 
       await expect(
-        firewall.submitAction(
-          "trader",
-          target,
-          ethers.parseEther("0.01"),
-          data,
-          "Frozen agent",
-        ),
+        firewall.submitAction("trader", target, 0, data, instructionHash),
       ).to.be.revertedWith("Agent is frozen");
+    });
+
+    it("reverts when agent has max strikes", async function () {
+      await firewall.setMaxStrikes(0);
+
+      await expect(
+        firewall.submitAction("trader", target, 0, data, instructionHash),
+      ).to.be.revertedWith("Max strikes exceeded");
     });
 
     it("reverts for non-existent agent", async function () {
       await expect(
-        firewall.submitAction(
-          "ghost",
-          target,
-          ethers.parseEther("0.01"),
-          data,
-          "No agent",
-        ),
+        firewall.submitAction("ghost", target, 0, data, instructionHash),
       ).to.be.revertedWith("Agent not found");
     });
 
-    it("increments queue ID for each queued action", async function () {
-      const unknownTarget = "0x9999999999999999999999999999999999999999";
+    it("increments queue ID for each action", async function () {
+      const hash1 = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+      const hash2 = "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 
-      await firewall.submitAction("trader", unknownTarget, 0, data, "first");
-      await firewall.submitAction("trader", unknownTarget, 0, data, "second");
+      await firewall.submitAction("trader", target, 0, data, hash1);
+      await firewall.submitAction("trader", target, 0, data, hash2);
 
       const first = await firewall.getQueuedAction(0);
       const second = await firewall.getQueuedAction(1);
-      expect(first.instruction).to.equal("first");
-      expect(second.instruction).to.equal("second");
+      expect(first.instructionHash).to.equal(hash1);
+      expect(second.instructionHash).to.equal(hash2);
     });
   });
 
-  describe("approveAction", function () {
-    const target = "0x9999999999999999999999999999999999999999";
+  describe("resolveAction", function () {
+    const target = "0x1111111111111111111111111111111111111111";
     const data = "0x";
+    const instructionHash = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     beforeEach(async function () {
       await firewall.registerAgentSimple(
@@ -365,11 +319,90 @@ describe("AgentFirewall", function () {
         agent1.address,
         ethers.parseEther("0.1"),
       );
-      // Submit to disallowed target so it gets queued
-      await firewall.submitAction("trader", target, 0, data, "queued action");
+      await firewall.submitAction("trader", target, 0, data, instructionHash);
     });
 
-    it("approves a queued action", async function () {
+    it("approves an action (decision = 1)", async function () {
+      const tx = await firewall.connect(oracle).resolveAction(0, 1);
+      await expect(tx)
+        .to.emit(firewall, "ActionApproved")
+        .withArgs(0, "trader");
+
+      const queued = await firewall.getQueuedAction(0);
+      expect(queued.resolved).to.equal(true);
+      expect(queued.decision).to.equal(1);
+    });
+
+    it("escalates an action (decision = 2)", async function () {
+      const tx = await firewall.connect(oracle).resolveAction(0, 2);
+      await expect(tx)
+        .to.emit(firewall, "ActionEscalated")
+        .withArgs(0, "trader", 0);
+
+      const queued = await firewall.getQueuedAction(0);
+      expect(queued.resolved).to.equal(false);
+      expect(queued.decision).to.equal(2);
+    });
+
+    it("blocks an action (decision = 3)", async function () {
+      const tx = await firewall.connect(oracle).resolveAction(0, 3);
+      await expect(tx)
+        .to.emit(firewall, "ActionBlocked")
+        .withArgs(0, "trader", "Blocked by CRE oracle");
+
+      const queued = await firewall.getQueuedAction(0);
+      expect(queued.resolved).to.equal(true);
+      expect(queued.decision).to.equal(3);
+    });
+
+    it("reverts on double resolve", async function () {
+      await firewall.connect(oracle).resolveAction(0, 1);
+      await expect(
+        firewall.connect(oracle).resolveAction(0, 1),
+      ).to.be.revertedWith("Already resolved");
+    });
+
+    it("reverts for invalid decision", async function () {
+      await expect(
+        firewall.connect(oracle).resolveAction(0, 0),
+      ).to.be.revertedWith("Invalid decision");
+
+      await expect(
+        firewall.connect(oracle).resolveAction(0, 4),
+      ).to.be.revertedWith("Invalid decision");
+    });
+
+    it("reverts for non-existent action", async function () {
+      await expect(
+        firewall.connect(oracle).resolveAction(999, 1),
+      ).to.be.revertedWith("Action not found");
+    });
+
+    it("reverts when called by non-oracle", async function () {
+      await expect(
+        firewall.connect(other).resolveAction(0, 1),
+      ).to.be.revertedWith("Only CRE oracle");
+    });
+  });
+
+  describe("approveAction (Ledger)", function () {
+    const target = "0x1111111111111111111111111111111111111111";
+    const data = "0x";
+    const instructionHash = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    beforeEach(async function () {
+      await firewall.registerAgentSimple(
+        "trader",
+        ensNode,
+        agent1.address,
+        ethers.parseEther("0.1"),
+      );
+      await firewall.submitAction("trader", target, 0, data, instructionHash);
+      // CRE escalates the action
+      await firewall.connect(oracle).resolveAction(0, 2);
+    });
+
+    it("approves an escalated action", async function () {
       const tx = await firewall.approveAction(0);
       await expect(tx)
         .to.emit(firewall, "ActionApproved")
@@ -377,6 +410,13 @@ describe("AgentFirewall", function () {
 
       const queued = await firewall.getQueuedAction(0);
       expect(queued.resolved).to.equal(true);
+    });
+
+    it("reverts if action is not escalated", async function () {
+      await firewall.submitAction("trader", target, 0, data, instructionHash);
+      await expect(
+        firewall.approveAction(1),
+      ).to.be.revertedWith("Action not escalated");
     });
 
     it("reverts on double resolve", async function () {
@@ -399,9 +439,10 @@ describe("AgentFirewall", function () {
     });
   });
 
-  describe("rejectAction", function () {
-    const target = "0x9999999999999999999999999999999999999999";
+  describe("rejectAction (Ledger)", function () {
+    const target = "0x1111111111111111111111111111111111111111";
     const data = "0x";
+    const instructionHash = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     beforeEach(async function () {
       await firewall.registerAgentSimple(
@@ -410,10 +451,11 @@ describe("AgentFirewall", function () {
         agent1.address,
         ethers.parseEther("0.1"),
       );
-      await firewall.submitAction("trader", target, 0, data, "queued action");
+      await firewall.submitAction("trader", target, 0, data, instructionHash);
+      await firewall.connect(oracle).resolveAction(0, 2);
     });
 
-    it("rejects a queued action", async function () {
+    it("rejects an escalated action", async function () {
       const tx = await firewall.rejectAction(0);
       await expect(tx)
         .to.emit(firewall, "ActionBlocked")
@@ -421,6 +463,13 @@ describe("AgentFirewall", function () {
 
       const queued = await firewall.getQueuedAction(0);
       expect(queued.resolved).to.equal(true);
+    });
+
+    it("reverts if action is not escalated", async function () {
+      await firewall.submitAction("trader", target, 0, data, instructionHash);
+      await expect(
+        firewall.rejectAction(1),
+      ).to.be.revertedWith("Action not escalated");
     });
 
     it("reverts on double resolve", async function () {
