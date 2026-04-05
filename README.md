@@ -1,6 +1,9 @@
 # ENShell Contract
 
 [![codecov](https://codecov.io/gh/0xenshell/contract/graph/badge.svg?token=1I0A2ULU69)](https://codecov.io/gh/0xenshell/contract)
+[![CodeQuill – Verified authorship](https://app.codequill.xyz/badges/claim/7fd26b9c-5836-43cf-b4c1-9402d982e58f)](https://app.codequill.xyz/explore/0xenshell/contract)
+[![CodeQuill – Latest snapshot](https://app.codequill.xyz/badges/snapshot/7fd26b9c-5836-43cf-b4c1-9402d982e58f)](https://app.codequill.xyz/explore/0xenshell/contract)
+[![CodeQuill Trust Index](https://app.codequill.xyz/badges/trust/7fd26b9c-5836-43cf-b4c1-9402d982e58f)](https://app.codequill.xyz/explore/0xenshell/contract)
 
 Smart contract infrastructure for **ENShell**, an on-chain firewall for AI agents. The `AgentFirewall` contract stores agent registrations, enforces permission policies, queues risky actions for Ledger approval, tracks threat scores via Chainlink CRE, and emits events for the public threat feed.
 
